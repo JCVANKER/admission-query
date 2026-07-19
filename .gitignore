@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+admission.db
+*.db-journal
+*.db-wal
+*.db-shm
+/instance/
+.DS_Store
+*.swp
+*.swo

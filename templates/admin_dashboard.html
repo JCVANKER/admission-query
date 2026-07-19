@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 录取查询系统</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 顶部导航 -->
+        <nav class="admin-nav">
+            <h2>📋 管理后台</h2>
+            <div class="nav-actions">
+                <span class="stat-badge" id="totalBadge">总计: --</span>
+                <a href="/admin/logout" class="btn-logout">退出登录</a>
+                <a href="/" class="btn-back">← 查询首页</a>
+            </div>
+        </nav>
+
+        <!-- 上传区域 -->
+        <div class="admin-section">
+            <h3>📤 上传录取名单</h3>
+            <div class="upload-tabs">
+                <button class="tab-btn active" onclick="switchTab('text')">文本粘贴</button>
+                <button class="tab-btn" onclick="switchTab('csv')">CSV 粘贴</button>
+                <button class="tab-btn" onclick="switchTab('file')">文件上传</button>
+            </div>
+
+            <!-- 文本模式 -->
+            <div class="tab-panel active" id="panel-text">
+                <p class="tab-hint">每行一个姓名，格式：<code>姓名</code> 或 <code>姓名,准考证号,类别</code></p>
+                <textarea id="textInput" rows="8" placeholder="张三&#10;李四&#10;王五,20240001,本科一批&#10;赵六,20240002,本科二批"></textarea>
+            </div>
+
+            <!-- CSV模式 -->
+            <div class="tab-panel" id="panel-csv">
+                <p class="tab-hint">粘贴 CSV 内容，第一行为表头：<code>姓名,准考证号,类别</code></p>
+                <textarea id="csvInput" rows="8" placeholder="姓名,准考证号,类别&#10;张三,20240001,本科一批&#10;李四,20240002,本科二批"></textarea>
+            </div>
+
+            <!-- 文件模式 -->
+            <div class="tab-panel" id="panel-file">
+                <p class="tab-hint">支持 .txt 或 .csv 文件</p>
+                <div class="file-drop-zone" id="dropZone">
+                    <p>📂 点击选择文件或拖拽到此处</p>
+                    <input type="file" id="fileInput" accept=".txt,.csv" style="display:none;">
+                </div>
+            </div>
+
+            <div class="upload-actions">
+                <button class="btn-primary" onclick="doUpload()">📤 上传名单</button>
+                <span class="upload-msg" id="uploadMsg"></span>
+            </div>
+        </div>
+
+        <!-- 名单管理 -->
+        <div class="admin-section">
+            <h3>📋 录取名单管理</h3>
+            <div class="list-toolbar">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="搜索姓名或准考证号..." oninput="debounceSearch()">
+                </div>
+                <div class="toolbar-actions">
+                    <button class="btn-danger-outline" onclick="doClearAll()">🗑 清空全部</button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table" id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>姓名</th>
+                            <th>准考证号</th>
+                            <th>类别</th>
+                            <th>添加时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr><td colspan="6" class="loading-cell">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination" id="pagination"></div>
+        </div>
+
+        <footer class="footer">
+            <p>录取查询系统 · 管理后台</p>
+        </footer>
+    </div>
+
+    <script src="/static/js/admin.js"></script>
+</body>
+</html>

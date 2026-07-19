@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理员登录 - 录取查询系统</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-icon">🔐</div>
+            <h1>管理员登录</h1>
+            <p class="subtitle">录取查询系统后台管理</p>
+        </header>
+
+        <div class="query-card">
+            <form class="query-form" id="loginForm" onsubmit="return doLogin()">
+                <div class="input-group">
+                    <label for="usernameInput">
+                        <span class="label-icon">👤</span> 管理员账号
+                    </label>
+                    <input
+                        type="text"
+                        id="usernameInput"
+                        placeholder="请输入管理员账号"
+                        autocomplete="off"
+                        autofocus
+                        required
+                    >
+                </div>
+                <div class="input-group">
+                    <label for="passwordInput">
+                        <span class="label-icon">🔑</span> 管理员密码
+                    </label>
+                    <input
+                        type="password"
+                        id="passwordInput"
+                        placeholder="请输入密码"
+                        autocomplete="off"
+                        required
+                    >
+                </div>
+                <button class="btn-query" type="submit">
+                    <span>🔓</span> 登 录
+                </button>
+                <p class="form-hint" id="loginMsg" style="display:none;"></p>
+            </form>
+        </div>
+
+        <footer class="footer">
+            <p><a href="/">← 返回查询首页</a></p>
+        </footer>
+    </div>
+
+    <script>
+        async function doLogin() {
+            const msg = document.getElementById('loginMsg');
+            msg.style.display = 'none';
+
+            const resp = await fetch('/admin/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    username: document.getElementById('usernameInput').value,
+                    password: document.getElementById('passwordInput').value
+                })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                window.location.href = '/admin/dashboard';
+            } else {
+                msg.style.display = 'block';
+                msg.style.color = '#e74c3c';
+                msg.textContent = data.message || '登录失败';
+            }
+            return false;
+        }
+    </script>
+</body>
+</html>

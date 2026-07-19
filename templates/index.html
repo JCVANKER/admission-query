@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>录取查询系统</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <header class="header">
+            <div class="header-icon">🎓</div>
+            <h1>录取查询系统</h1>
+            <p class="subtitle">请输入您的信息查询录取结果</p>
+        </header>
+
+        <!-- 查询卡片 -->
+        <div class="query-card">
+            <div class="query-form">
+                <div class="input-group">
+                    <label for="nameInput">
+                        <span class="label-icon">👤</span> 姓名
+                    </label>
+                    <input
+                        type="text"
+                        id="nameInput"
+                        placeholder="请输入您的姓名"
+                        autocomplete="off"
+                        autofocus
+                    >
+                </div>
+                <div class="input-group">
+                    <label for="examInput">
+                        <span class="label-icon">🔢</span> 准考证号
+                        <span class="label-hint">（选填）</span>
+                    </label>
+                    <input
+                        type="text"
+                        id="examInput"
+                        placeholder="请输入准考证号（可选）"
+                        autocomplete="off"
+                    >
+                </div>
+                <button class="btn-query" id="queryBtn" onclick="doQuery()">
+                    <span>🔍</span> 查询录取结果
+                </button>
+                <p class="form-hint">输入姓名即可查询，如有准考证号可提高准确性</p>
+            </div>
+        </div>
+
+        <!-- 结果区域 -->
+        <div class="result-area" id="resultArea" style="display:none;">
+            <div class="result-card" id="resultCard"></div>
+        </div>
+
+        <!-- 底部 -->
+        <footer class="footer">
+            <p>本系统仅供查询参考，最终结果以官方通知为准</p>
+        </footer>
+    </div>
+
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
