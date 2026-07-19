@@ -37,12 +37,10 @@ def init_db():
         CREATE TABLE IF NOT EXISTS admissions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            exam_number TEXT DEFAULT '',
             category TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         CREATE INDEX IF NOT EXISTS idx_admissions_name ON admissions(name);
-        CREATE INDEX IF NOT EXISTS idx_admissions_exam_number ON admissions(exam_number);
     """)
     db.commit()
     db.close()
@@ -71,31 +69,18 @@ def index():
 def query():
     """查询是否被录取"""
     name = request.args.get("name", "").strip()
-    exam_number = request.args.get("exam_number", "").strip()
 
-    if not name and not exam_number:
-        return jsonify({"success": False, "message": "请输入姓名或准考证号"})
+    if not name:
+        return jsonify({"success": False, "message": "请输入姓名"})
 
     db = get_db()
-
-    conditions = []
-    params = []
-    if name:
-        conditions.append("name = ?")
-        params.append(name)
-    if exam_number:
-        conditions.append("exam_number = ?")
-        params.append(exam_number)
-
-    where = " AND ".join(conditions)
-    row = db.execute(f"SELECT name, exam_number, category FROM admissions WHERE {where}", params).fetchone()
+    row = db.execute("SELECT name, category FROM admissions WHERE name = ?", (name,)).fetchone()
 
     if row:
         return jsonify({
             "success": True,
             "admitted": True,
             "name": row["name"],
-            "exam_number": row["exam_number"],
             "category": row["category"]
         })
     else:
@@ -149,7 +134,7 @@ def admin_upload():
     if not data or "names" not in data:
         return jsonify({"success": False, "message": "未收到数据"})
 
-    names = data["names"]  # list of {name, exam_number?, category?}
+    names = data["names"]
     if not names:
         return jsonify({"success": False, "message": "名单为空"})
 
@@ -160,27 +145,20 @@ def admin_upload():
 
     for item in names:
         name = item.get("name", "").strip() if isinstance(item, dict) else str(item).strip()
-        exam_number = item.get("exam_number", "").strip() if isinstance(item, dict) else ""
         category = item.get("category", "").strip() if isinstance(item, dict) else ""
 
         if not name:
             continue
 
-        # 检查重复
-        existing = db.execute(
-            "SELECT id FROM admissions WHERE name = ? AND exam_number = ?",
-            (name, exam_number)
-        ).fetchone()
+        # 检查重复（按姓名去重）
+        existing = db.execute("SELECT id FROM admissions WHERE name = ?", (name,)).fetchone()
 
         if existing:
             skipped += 1
             continue
 
         try:
-            db.execute(
-                "INSERT INTO admissions (name, exam_number, category) VALUES (?, ?, ?)",
-                (name, exam_number, category)
-            )
+            db.execute("INSERT INTO admissions (name, category) VALUES (?, ?)", (name, category))
             inserted += 1
         except Exception as e:
             errors.append(str(e))
@@ -207,17 +185,17 @@ def admin_list():
 
     if search:
         count = db.execute(
-            "SELECT COUNT(*) as cnt FROM admissions WHERE name LIKE ? OR exam_number LIKE ?",
-            (f"%{search}%", f"%{search}%")
+            "SELECT COUNT(*) as cnt FROM admissions WHERE name LIKE ?",
+            (f"%{search}%",)
         ).fetchone()["cnt"]
         rows = db.execute(
-            "SELECT id, name, exam_number, category, created_at FROM admissions WHERE name LIKE ? OR exam_number LIKE ? ORDER BY id DESC LIMIT ? OFFSET ?",
-            (f"%{search}%", f"%{search}%", per_page, (page - 1) * per_page)
+            "SELECT id, name, category, created_at FROM admissions WHERE name LIKE ? ORDER BY id DESC LIMIT ? OFFSET ?",
+            (f"%{search}%", per_page, (page - 1) * per_page)
         ).fetchall()
     else:
         count = db.execute("SELECT COUNT(*) as cnt FROM admissions").fetchone()["cnt"]
         rows = db.execute(
-            "SELECT id, name, exam_number, category, created_at FROM admissions ORDER BY id DESC LIMIT ? OFFSET ?",
+            "SELECT id, name, category, created_at FROM admissions ORDER BY id DESC LIMIT ? OFFSET ?",
             (per_page, (page - 1) * per_page)
         ).fetchall()
 

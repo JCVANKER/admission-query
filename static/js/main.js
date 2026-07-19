@@ -4,15 +4,13 @@
 
 async function doQuery() {
     const nameInput = document.getElementById('nameInput');
-    const examInput = document.getElementById('examInput');
     const queryBtn = document.getElementById('queryBtn');
     const resultArea = document.getElementById('resultArea');
     const resultCard = document.getElementById('resultCard');
 
     const name = nameInput.value.trim();
-    const examNumber = examInput.value.trim();
 
-    if (!name && !examNumber) {
+    if (!name) {
         shakeElement(nameInput);
         nameInput.focus();
         return;
@@ -24,8 +22,7 @@ async function doQuery() {
 
     try {
         const params = new URLSearchParams();
-        if (name) params.set('name', name);
-        if (examNumber) params.set('exam_number', examNumber);
+        params.set('name', name);
 
         const resp = await fetch(`/api/query?${params.toString()}`);
         const data = await resp.json();
@@ -41,7 +38,6 @@ async function doQuery() {
         } else if (data.admitted) {
             resultCard.className = 'result-card success';
             let detailHtml = `<p><strong>姓名：</strong>${escapeHtml(data.name)}</p>`;
-            if (data.exam_number) detailHtml += `<p><strong>准考证号：</strong>${escapeHtml(data.exam_number)}</p>`;
             if (data.category) detailHtml += `<p><strong>类别：</strong>${escapeHtml(data.category)}</p>`;
             resultCard.innerHTML = `
                 <div class="result-icon">🎉</div>
@@ -53,7 +49,7 @@ async function doQuery() {
             resultCard.innerHTML = `
                 <div class="result-icon">😞</div>
                 <h2>未查询到录取信息</h2>
-                <p style="color:var(--text-secondary);margin-top:4px;">请核对姓名和准考证号是否正确</p>
+                <p style="color:var(--text-secondary);margin-top:4px;">请核对姓名是否正确</p>
             `;
         }
 
@@ -74,9 +70,6 @@ async function doQuery() {
 
 // 回车触发查询
 document.getElementById('nameInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') doQuery();
-});
-document.getElementById('examInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') doQuery();
 });
 

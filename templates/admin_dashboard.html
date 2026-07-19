@@ -29,14 +29,14 @@
 
             <!-- 文本模式 -->
             <div class="tab-panel active" id="panel-text">
-                <p class="tab-hint">每行一个姓名，格式：<code>姓名</code> 或 <code>姓名,准考证号,类别</code></p>
-                <textarea id="textInput" rows="8" placeholder="张三&#10;李四&#10;王五,20240001,本科一批&#10;赵六,20240002,本科二批"></textarea>
+                <p class="tab-hint">每行一个姓名，格式：<code>姓名</code> 或 <code>姓名,类别</code></p>
+                <textarea id="textInput" rows="8" placeholder="张三&#10;李四&#10;王五,本科一批&#10;赵六,本科二批"></textarea>
             </div>
 
             <!-- CSV模式 -->
             <div class="tab-panel" id="panel-csv">
-                <p class="tab-hint">粘贴 CSV 内容，第一行为表头：<code>姓名,准考证号,类别</code></p>
-                <textarea id="csvInput" rows="8" placeholder="姓名,准考证号,类别&#10;张三,20240001,本科一批&#10;李四,20240002,本科二批"></textarea>
+                <p class="tab-hint">粘贴 CSV 内容，第一行为表头：<code>姓名,类别</code></p>
+                <textarea id="csvInput" rows="8" placeholder="姓名,类别&#10;张三,本科一批&#10;李四,本科二批"></textarea>
             </div>
 
             <!-- 文件模式 -->
@@ -59,7 +59,7 @@
             <h3>📋 录取名单管理</h3>
             <div class="list-toolbar">
                 <div class="search-box">
-                    <input type="text" id="searchInput" placeholder="搜索姓名或准考证号..." oninput="debounceSearch()">
+                    <input type="text" id="searchInput" placeholder="搜索姓名..." oninput="debounceSearch()">
                 </div>
                 <div class="toolbar-actions">
                     <button class="btn-danger-outline" onclick="doClearAll()">🗑 清空全部</button>
@@ -71,14 +71,13 @@
                         <tr>
                             <th>ID</th>
                             <th>姓名</th>
-                            <th>准考证号</th>
                             <th>类别</th>
                             <th>添加时间</th>
                             <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="tableBody">
-                        <tr><td colspan="6" class="loading-cell">加载中...</td></tr>
+                        <tr><td colspan="5" class="loading-cell">加载中...</td></tr>
                     </tbody>
                 </table>
             </div>

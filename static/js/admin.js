@@ -99,8 +99,7 @@ function parseInput(text, isCsv) {
             if (parts[0]) {
                 result.push({
                     name: parts[0],
-                    exam_number: parts[1] || '',
-                    category: parts[2] || ''
+                    category: parts[1] || ''
                 });
             }
         }
@@ -110,8 +109,7 @@ function parseInput(text, isCsv) {
             if (parts[0]) {
                 result.push({
                     name: parts[0],
-                    exam_number: parts[1] || '',
-                    category: parts[2] || ''
+                    category: parts[1] || ''
                 });
             }
         }
@@ -149,7 +147,7 @@ function initFileDrop() {
 async function loadList(page) {
     currentPage = page;
     const tbody = document.getElementById('tableBody');
-    tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">加载中...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载中...</td></tr>';
 
     try {
         const params = new URLSearchParams({ page, per_page: 50 });
@@ -159,7 +157,7 @@ async function loadList(page) {
         const data = await resp.json();
 
         if (!data.items.length) {
-            tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">暂无数据</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="loading-cell">暂无数据</td></tr>';
             renderPagination(0, page);
             return;
         }
@@ -168,7 +166,6 @@ async function loadList(page) {
             <tr>
                 <td>${item.id}</td>
                 <td><strong>${escapeHtml(item.name)}</strong></td>
-                <td>${escapeHtml(item.exam_number) || '-'}</td>
                 <td>${escapeHtml(item.category) || '-'}</td>
                 <td>${item.created_at || '-'}</td>
                 <td><button class="btn-delete" onclick="doDelete(${item.id})">删除</button></td>
@@ -177,7 +174,7 @@ async function loadList(page) {
 
         renderPagination(data.total, page);
     } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">加载失败，请刷新重试</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载失败，请刷新重试</td></tr>';
     }
 }
 
