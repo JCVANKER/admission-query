@@ -42,8 +42,11 @@ def close_db(exception):
 
 
 def init_db():
+    """初始化数据库表结构并执行自动迁移"""
     db = sqlite3.connect(app.config["DATABASE"])
     db.execute("PRAGMA journal_mode=WAL")
+
+    # 创建基础表
     db.executescript("""
         CREATE TABLE IF NOT EXISTS admissions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,18 +69,51 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         CREATE INDEX IF NOT EXISTS idx_query_logs_name ON query_logs(name);
+
+        CREATE TABLE IF NOT EXISTS schema_version (
+            version INTEGER PRIMARY KEY,
+            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
     """)
-    # 兼容旧数据库：如果 admissions 表没有 class_type 列，自动添加
-    try:
-        db.execute("SELECT class_type FROM admissions LIMIT 1")
-    except sqlite3.OperationalError:
-        db.execute("ALTER TABLE admissions ADD COLUMN class_type TEXT DEFAULT 'kete'")
-    try:
-        db.execute("SELECT class_type FROM query_logs LIMIT 1")
-    except sqlite3.OperationalError:
-        db.execute("ALTER TABLE query_logs ADD COLUMN class_type TEXT DEFAULT ''")
+
+    # 获取当前 schema 版本
+    cur = db.execute("SELECT MAX(version) FROM schema_version")
+    row = cur.fetchone()
+    current_version = row[0] if row[0] is not None else 0
+
+    # 迁移脚本列表（按版本号递增）
+    migrations = {
+        1: [
+            "ALTER TABLE admissions ADD COLUMN class_type TEXT DEFAULT 'kete'",
+            "ALTER TABLE query_logs ADD COLUMN class_type TEXT DEFAULT ''",
+        ],
+    }
+
+    # 按序执行未应用的迁移
+    for ver in sorted(migrations.keys()):
+        if ver <= current_version:
+            continue
+        sqls = migrations[ver]
+        if not sqls:
+            continue  # 空迁移跳过
+        for sql in sqls:
+            try:
+                db.execute(sql)
+            except sqlite3.OperationalError as e:
+                # 列已存在则跳过（幂等）
+                if "duplicate column" in str(e).lower():
+                    pass
+                else:
+                    raise
+        db.execute("INSERT INTO schema_version (version) VALUES (?)", (ver,))
+        print(f"[DB Migration] v{ver} applied")
+
     db.commit()
     db.close()
+
+
+# 应用启动时自动执行数据库初始化
+init_db()
 
 
 # ──────────────────── 班型配置 ────────────────────
@@ -461,5 +497,4 @@ def admin_logs_export():
 # ──────────────────── 启动 ────────────────────
 
 if __name__ == "__main__":
-    init_db()
     app.run(host="0.0.0.0", port=5000, debug=True)
