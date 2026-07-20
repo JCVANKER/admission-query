@@ -18,7 +18,7 @@ async function doQuery() {
 
     // 按钮加载态
     queryBtn.disabled = true;
-    queryBtn.innerHTML = '<span>⏳</span> 查询中...';
+    queryBtn.textContent = '查询中...';
 
     try {
         const params = new URLSearchParams();
@@ -49,7 +49,7 @@ async function doQuery() {
             resultCard.innerHTML = `
                 <div class="result-icon">😞</div>
                 <h2>未查询到录取信息</h2>
-                <p style="color:var(--text-secondary);margin-top:4px;">请核对姓名是否正确</p>
+                <p style="color:rgba(255,255,255,0.6);margin-top:8px;font-size:0.85rem;">请核对姓名是否正确</p>
             `;
         }
 
@@ -64,7 +64,7 @@ async function doQuery() {
         `;
     } finally {
         queryBtn.disabled = false;
-        queryBtn.innerHTML = '<span>🔍</span> 查询录取结果';
+        queryBtn.textContent = '查询录取结果';
     }
 }
 

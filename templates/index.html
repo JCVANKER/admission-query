@@ -3,49 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>录取查询系统</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <title>录取结果查询</title>
+    <link rel="stylesheet" href="/static/css/query-theme.css">
 </head>
 <body>
-    <div class="container">
-        <!-- 头部 -->
-        <header class="header">
-            <div class="header-icon">🎓</div>
-            <h1>录取查询系统</h1>
-            <p class="subtitle">请输入您的信息查询录取结果</p>
+    <div class="page">
+        <!-- 顶部 Logo 区域 -->
+        <header class="top-bar">
+            <div class="logo-row">
+                <!-- 左侧：北京大学 -->
+                <div class="logo-item">
+                    <div class="logo-circle">北大</div>
+                    <div class="logo-text">
+                        <span class="logo-name">北京大学</span>
+                        <span class="logo-en">PEKING UNIVERSITY</span>
+                    </div>
+                </div>
+                <!-- 分隔线 -->
+                <div class="logo-divider"></div>
+                <!-- 右侧：点猫科技 -->
+                <div class="logo-item">
+                    <div class="logo-icon">▶</div>
+                    <div class="logo-text">
+                        <span class="logo-name">点猫科技</span>
+                    </div>
+                </div>
+            </div>
+            <p class="lab-name">北大-点猫科技人工智能教育联合实验室</p>
         </header>
 
-        <!-- 查询卡片 -->
-        <div class="query-card">
-            <div class="query-form">
-                <div class="input-group">
-                    <label for="nameInput">
-                        <span class="label-icon">👤</span> 姓名
-                    </label>
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <div class="title-group">
+                <p class="sub-title">编程猫在线教育中心</p>
+                <h1 class="main-title">科特班-英才计划录取结果查询</h1>
+                <p class="hint-text">输入学员姓名，查看本次选拔录取结果</p>
+            </div>
+
+            <!-- 查询表单卡片 -->
+            <div class="form-card">
+                <div class="form-group">
+                    <label for="nameInput" class="form-label">学员姓名</label>
                     <input
                         type="text"
                         id="nameInput"
-                        placeholder="请输入您的姓名"
+                        class="form-input"
+                        placeholder="请输入学员姓名"
                         autocomplete="off"
                         autofocus
                     >
                 </div>
-                <button class="btn-query" id="queryBtn" onclick="doQuery()">
-                    <span>🔍</span> 查询录取结果
+                <button class="btn-submit" id="queryBtn" onclick="doQuery()">
+                    查询录取结果
                 </button>
-                <p class="form-hint">请输入您的姓名进行查询</p>
             </div>
-        </div>
+        </main>
 
         <!-- 结果区域 -->
         <div class="result-area" id="resultArea" style="display:none;">
             <div class="result-card" id="resultCard"></div>
         </div>
-
-        <!-- 底部 -->
-        <footer class="footer">
-            <p>本系统仅供查询参考，最终结果以官方通知为准</p>
-        </footer>
     </div>
 
     <script src="/static/js/main.js"></script>

@@ -1,0 +1,294 @@
+/* ═══════════════════════════════════════════
+   录取查询系统 - 查询页主题样式
+   深红色渐变风格，参考截图设计
+   ═══════════════════════════════════════════ */
+
+/* ── 基础 ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+    min-height: 100vh;
+    background: linear-gradient(180deg, #c53a2a 0%, #a83220 30%, #8a2618 70%, #5c1a0e 100%);
+    color: #fff;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ── 页面容器 ── */
+.page {
+    max-width: 420px;
+    margin: 0 auto;
+    padding: 20px 16px 40px;
+    min-height: 100vh;
+}
+
+@media (min-width: 768px) {
+    .page { max-width: 480px; padding: 24px 20px 60px; }
+}
+
+/* ── 顶部 Logo 栏 ── */
+.top-bar {
+    text-align: center;
+    padding-bottom: 16px;
+}
+
+.logo-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 6px;
+}
+
+.logo-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.logo-circle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.logo-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.logo-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+}
+
+.logo-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.05em;
+}
+
+.logo-en {
+    font-size: 0.55rem;
+    color: rgba(255,255,255,0.7);
+    letter-spacing: 0.08em;
+}
+
+.logo-divider {
+    width: 1px;
+    height: 28px;
+    background: rgba(255,255,255,0.3);
+}
+
+.lab-name {
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.75);
+    letter-spacing: 0.1em;
+}
+
+/* ── 主内容区 ── */
+.main-content {
+    padding-top: 48px;
+}
+
+.title-group {
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+.sub-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.9);
+    margin-bottom: 8px;
+    letter-spacing: 0.05em;
+}
+
+.main-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 10px;
+    letter-spacing: 0.02em;
+    line-height: 1.3;
+}
+
+.hint-text {
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.6);
+}
+
+/* ── 表单卡片 ── */
+.form-card {
+    background: rgba(0,0,0,0.18);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 16px;
+    padding: 20px 18px 24px;
+    backdrop-filter: blur(4px);
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 8px;
+}
+
+.form-input {
+    width: 100%;
+    height: 48px;
+    padding: 0 16px;
+    font-size: 0.95rem;
+    color: #333;
+    background: #fff;
+    border: none;
+    border-radius: 10px;
+    outline: none;
+    transition: box-shadow 0.2s ease;
+    -webkit-appearance: none;
+}
+
+.form-input::placeholder {
+    color: #aaa;
+    font-size: 0.9rem;
+}
+
+.form-input:focus {
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.2);
+}
+
+/* ── 提交按钮 ── */
+.btn-submit {
+    display: block;
+    width: 100%;
+    height: 48px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(135deg, #e8554a 0%, #d14035 100%);
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-submit:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(232, 85, 74, 0.4);
+}
+
+.btn-submit:active {
+    transform: translateY(0);
+}
+
+.btn-submit:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* ── 结果区域 ── */
+.result-area {
+    margin-top: 24px;
+    animation: fadeInUp 0.4s ease;
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.result-card {
+    padding: 24px 20px;
+    border-radius: 14px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.15);
+}
+
+.result-card.success {
+    background: rgba(5, 150, 105, 0.2);
+    border-color: rgba(5, 150, 105, 0.3);
+}
+
+.result-card.fail {
+    background: rgba(220, 38, 38, 0.2);
+    border-color: rgba(220, 38, 38, 0.3);
+}
+
+.result-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+.result-card h2 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.result-card.success h2 { color: #6ee7b7; }
+.result-card.fail h2 { color: #fca5a5; }
+
+.result-detail {
+    display: inline-block;
+    text-align: left;
+    margin-top: 10px;
+    background: rgba(0,0,0,0.15);
+    border-radius: 10px;
+    padding: 14px 20px;
+}
+
+.result-detail p {
+    padding: 3px 0;
+    font-size: 0.9rem;
+    color: rgba(255,255,255,0.9);
+}
+
+.result-detail strong {
+    color: #fff;
+    font-weight: 600;
+}
+
+/* ── 键盘可用性 ── */
+:focus-visible {
+    outline: 2px solid rgba(255,255,255,0.5);
+    outline-offset: 2px;
+}
+
+/* ── 打印 ── */
+@media print {
+    body { background: #fff; color: #333; }
+    .btn-submit { display: none; }
+}
