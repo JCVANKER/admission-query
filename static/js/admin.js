@@ -133,7 +133,7 @@ function initFileDrop() {
 async function loadList(page) {
     currentPage = page;
     const tbody = document.getElementById('tableBody');
-    const colspan = 6;
+    const colspan = 5;
     tbody.innerHTML = `<tr><td colspan="${colspan}" class="loading-cell">加载中...</td></tr>`;
 
     try {
@@ -155,7 +155,6 @@ async function loadList(page) {
         tbody.innerHTML = data.items.map(item => `
             <tr>
                 <td><input type="checkbox" class="list-check" value="${item.id}"></td>
-                <td>${item.id}</td>
                 <td><strong>${escapeHtml(item.name)}</strong></td>
                 <td>${item.class_type === 'yucai' ? '育才班' : '科特班'}</td>
                 <td>${item.created_at || '-'}</td>
@@ -255,7 +254,7 @@ let logSearchTimer = null;
 async function loadLogs(page) {
     logCurrentPage = page;
     const tbody = document.getElementById('logTableBody');
-    const colspan = 8;
+    const colspan = 7;
     tbody.innerHTML = `<tr><td colspan="${colspan}" class="loading-cell">加载中...</td></tr>`;
 
     try {
@@ -277,7 +276,6 @@ async function loadLogs(page) {
         tbody.innerHTML = data.items.map(item => `
             <tr>
                 <td><input type="checkbox" class="log-check" value="${item.id}"></td>
-                <td>${item.id}</td>
                 <td><strong>${escapeHtml(item.name)}</strong></td>
                 <td>${item.class_type === 'yucai' ? '育才班' : item.class_type === 'kete' ? '科特班' : '-'}</td>
                 <td style="color:${item.admitted ? '#059669' : '#dc2626'};font-weight:600;">${item.admitted ? '✅ 已录取' : '❌ 未录取'}</td>
