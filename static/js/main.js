@@ -34,6 +34,8 @@ async function doQuery() {
             const redirectParams = new URLSearchParams();
             redirectParams.set('name', data.name);
             if (data.category) redirectParams.set('category', data.category);
+            if (data.grade) redirectParams.set('grade', data.grade);
+            if (data.score) redirectParams.set('score', data.score);
             window.location.href = '/result?' + redirectParams.toString();
             return;
         } else {

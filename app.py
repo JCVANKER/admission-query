@@ -1,8 +1,12 @@
+import random
 import sqlite3
 import os
+import csv
+import io
+import time
 from datetime import datetime
 
-from flask import Flask, g, render_template, request, jsonify, redirect, url_for, flash, session
+from flask import Flask, g, render_template, request, jsonify, redirect, url_for, flash, session, make_response
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 
@@ -11,6 +15,13 @@ from config import Config
 
 app = Flask(__name__)
 app.config.from_object(Config)
+
+# 静态文件版本号：基于 app.py 修改时间，部署更新后自动变化，强制浏览器刷新缓存
+APP_VERSION = str(int(os.path.getmtime(__file__)))
+
+@app.context_processor
+def inject_version():
+    return dict(app_version=APP_VERSION)
 
 
 # ──────────────────── 数据库 ────────────────────
@@ -38,12 +49,38 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             category TEXT DEFAULT '',
+            grade TEXT DEFAULT '',
+            score TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         CREATE INDEX IF NOT EXISTS idx_admissions_name ON admissions(name);
+
+        CREATE TABLE IF NOT EXISTS query_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            admitted INTEGER DEFAULT 0,
+            schedule_date TEXT DEFAULT '',
+            schedule_time TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_query_logs_name ON query_logs(name);
     """)
     db.commit()
     db.close()
+
+
+# ──────────────────── 辅助函数 ────────────────────
+
+def generate_grade():
+    """生成综合成绩：A-、A、A+"""
+    grades = ["A-", "A", "A+"]
+    weights = [0.2, 0.5, 0.3]  # A- 20%, A 50%, A+ 30%
+    return random.choices(grades, weights=weights)[0]
+
+
+def generate_score():
+    """生成综合得分：91.3 到 97.6 之间，保留一位小数"""
+    return round(random.uniform(91.3, 97.6), 1)
 
 
 # ──────────────────── 认证 ────────────────────
@@ -53,6 +90,16 @@ def login_required(f):
     def decorated(*args, **kwargs):
         if not session.get("admin_logged_in"):
             return redirect(url_for("admin_login_page"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def api_login_required(f):
+    """API 专用认证：未登录返回 JSON 401 而非重定向"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("admin_logged_in"):
+            return jsonify({"success": False, "message": "未登录，请先登录", "code": 401}), 401
         return f(*args, **kwargs)
     return decorated
 
@@ -70,7 +117,9 @@ def result_page():
     """录取结果页（独立页面）"""
     name = request.args.get("name", "")
     category = request.args.get("category", "")
-    return render_template("result.html", name=name, category=category)
+    grade = request.args.get("grade", "")
+    score = request.args.get("score", "")
+    return render_template("result.html", name=name, category=category, grade=grade, score=score)
 
 
 @app.route("/api/query")
@@ -82,16 +131,40 @@ def query():
         return jsonify({"success": False, "message": "请输入姓名"})
 
     db = get_db()
-    row = db.execute("SELECT name, category FROM admissions WHERE name = ?", (name,)).fetchone()
+    row = db.execute("SELECT name, category, grade, score FROM admissions WHERE name = ?", (name,)).fetchone()
 
     if row:
+        # 已有记录，返回固定值
+        grade = row["grade"] or generate_grade()
+        score = row["score"] or str(generate_score())
+        # 如果之前没有生成过，更新到数据库
+        if not row["grade"] or not row["score"]:
+            db.execute(
+                "UPDATE admissions SET grade = ?, score = ? WHERE name = ?",
+                (grade, score, name)
+            )
+            db.commit()
+        # 记录查询日志
+        db.execute(
+            "INSERT INTO query_logs (name, admitted) VALUES (?, 1)",
+            (name,)
+        )
+        db.commit()
         return jsonify({
             "success": True,
             "admitted": True,
             "name": row["name"],
-            "category": row["category"]
+            "category": row["category"],
+            "grade": grade,
+            "score": score
         })
     else:
+        # 记录未录取查询
+        db.execute(
+            "INSERT INTO query_logs (name, admitted) VALUES (?, 0)",
+            (name,)
+        )
+        db.commit()
         return jsonify({"success": True, "admitted": False, "message": "未查询到录取信息"})
 
 
@@ -127,7 +200,7 @@ def admin_dashboard():
 
 
 @app.route("/api/admin/stats")
-@login_required
+@api_login_required
 def admin_stats():
     db = get_db()
     total = db.execute("SELECT COUNT(*) as cnt FROM admissions").fetchone()["cnt"]
@@ -135,7 +208,7 @@ def admin_stats():
 
 
 @app.route("/api/admin/upload", methods=["POST"])
-@login_required
+@api_login_required
 def admin_upload():
     """上传录取名单 - 支持 JSON、纯文本、CSV"""
     data = request.get_json()
@@ -182,7 +255,7 @@ def admin_upload():
 
 
 @app.route("/api/admin/list")
-@login_required
+@api_login_required
 def admin_list():
     """分页获取录取名单"""
     page = request.args.get("page", 1, type=int)
@@ -216,7 +289,7 @@ def admin_list():
 
 
 @app.route("/api/admin/delete/<int:record_id>", methods=["DELETE"])
-@login_required
+@api_login_required
 def admin_delete(record_id):
     db = get_db()
     db.execute("DELETE FROM admissions WHERE id = ?", (record_id,))
@@ -225,12 +298,97 @@ def admin_delete(record_id):
 
 
 @app.route("/api/admin/clear", methods=["DELETE"])
-@login_required
+@api_login_required
 def admin_clear():
     db = get_db()
     db.execute("DELETE FROM admissions")
     db.commit()
     return jsonify({"success": True})
+
+
+# ──────────────────── 查询日志 ────────────────────
+
+@app.route("/api/schedule/confirm", methods=["POST"])
+def schedule_confirm():
+    """用户确认上课安排"""
+    data = request.get_json()
+    name = data.get("name", "").strip()
+    date = data.get("date", "").strip()
+    time_slot = data.get("time", "").strip()
+
+    if not name:
+        return jsonify({"success": False, "message": "缺少姓名"})
+
+    db = get_db()
+    # 更新最近一条该姓名的录取查询日志
+    db.execute(
+        "UPDATE query_logs SET schedule_date = ?, schedule_time = ? WHERE name = ? AND admitted = 1 AND id = (SELECT MAX(id) FROM query_logs WHERE name = ? AND admitted = 1)",
+        (date, time_slot, name, name)
+    )
+    db.commit()
+    return jsonify({"success": True})
+
+
+@app.route("/api/admin/logs")
+@api_login_required
+def admin_logs():
+    """分页获取查询日志"""
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 50, type=int)
+    search = request.args.get("search", "").strip()
+
+    db = get_db()
+
+    if search:
+        count = db.execute(
+            "SELECT COUNT(*) as cnt FROM query_logs WHERE name LIKE ?",
+            (f"%{search}%",)
+        ).fetchone()["cnt"]
+        rows = db.execute(
+            "SELECT id, name, admitted, schedule_date, schedule_time, created_at FROM query_logs WHERE name LIKE ? ORDER BY id DESC LIMIT ? OFFSET ?",
+            (f"%{search}%", per_page, (page - 1) * per_page)
+        ).fetchall()
+    else:
+        count = db.execute("SELECT COUNT(*) as cnt FROM query_logs").fetchone()["cnt"]
+        rows = db.execute(
+            "SELECT id, name, admitted, schedule_date, schedule_time, created_at FROM query_logs ORDER BY id DESC LIMIT ? OFFSET ?",
+            (per_page, (page - 1) * per_page)
+        ).fetchall()
+
+    return jsonify({
+        "total": count,
+        "page": page,
+        "per_page": per_page,
+        "items": [dict(r) for r in rows]
+    })
+
+
+@app.route("/api/admin/logs/export")
+@api_login_required
+def admin_logs_export():
+    """导出查询日志为 CSV"""
+    db = get_db()
+    rows = db.execute(
+        "SELECT name, admitted, schedule_date, schedule_time, created_at FROM query_logs ORDER BY id DESC"
+    ).fetchall()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["姓名", "录取状态", "上课日期", "上课时段", "查询时间"])
+    for r in rows:
+        writer.writerow([
+            r["name"],
+            "已录取" if r["admitted"] else "未录取",
+            r["schedule_date"] or "-",
+            r["schedule_time"] or "-",
+            r["created_at"]
+        ])
+
+    output.seek(0)
+    resp = make_response(output.getvalue())
+    resp.headers["Content-Type"] = "text/csv; charset=utf-8-sig"
+    resp.headers["Content-Disposition"] = "attachment; filename=query_logs.csv"
+    return resp
 
 
 # ──────────────────── 启动 ────────────────────

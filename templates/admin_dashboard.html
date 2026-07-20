@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>管理后台 - 录取查询系统</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v={{ app_version }}">
 </head>
 <body>
     <div class="container">
@@ -84,11 +84,42 @@
             <div class="pagination" id="pagination"></div>
         </div>
 
+        <!-- 查询日志 -->
+        <div class="admin-section">
+            <h3>📊 查询回传记录</h3>
+            <div class="list-toolbar">
+                <div class="search-box">
+                    <input type="text" id="logSearchInput" placeholder="搜索姓名..." oninput="debounceLogSearch()">
+                </div>
+                <div class="toolbar-actions">
+                    <button class="btn-primary" onclick="doExportLogs()">📥 导出 CSV</button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table" id="logTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>姓名</th>
+                            <th>录取状态</th>
+                            <th>上课日期</th>
+                            <th>上课时段</th>
+                            <th>查询时间</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logTableBody">
+                        <tr><td colspan="6" class="loading-cell">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination" id="logPagination"></div>
+        </div>
+
         <footer class="footer">
             <p>录取查询系统 · 管理后台</p>
         </footer>
     </div>
 
-    <script src="/static/js/admin.js"></script>
+    <script src="/static/js/admin.js?v={{ app_version }}"></script>
 </body>
 </html>

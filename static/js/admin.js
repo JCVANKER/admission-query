@@ -154,6 +154,7 @@ async function loadList(page) {
         if (searchTerm) params.set('search', searchTerm);
 
         const resp = await fetch(`/api/admin/list?${params.toString()}`);
+        if (resp.status === 401) { window.location.href = '/admin'; return; }
         const data = await resp.json();
 
         if (!data.items.length) {
@@ -256,4 +257,95 @@ function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+// ═══════════════════════════════════════════
+// 查询日志
+// ═══════════════════════════════════════════
+
+let logCurrentPage = 1;
+let logSearchTerm = '';
+let logSearchTimer = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadLogs(1);
+});
+
+async function loadLogs(page) {
+    logCurrentPage = page;
+    const tbody = document.getElementById('logTableBody');
+    tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">加载中...</td></tr>';
+
+    try {
+        const params = new URLSearchParams({ page, per_page: 50 });
+        if (logSearchTerm) params.set('search', logSearchTerm);
+
+        const resp = await fetch(`/api/admin/logs?${params.toString()}`);
+
+        // 未登录 → 跳转登录页
+        if (resp.status === 401) {
+            window.location.href = '/admin';
+            return;
+        }
+
+        const data = await resp.json();
+
+        if (!data.items.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">暂无数据</td></tr>';
+            renderLogPagination(0, page);
+            return;
+        }
+
+        tbody.innerHTML = data.items.map(item => `
+            <tr>
+                <td>${item.id}</td>
+                <td><strong>${escapeHtml(item.name)}</strong></td>
+                <td style="color:${item.admitted ? '#059669' : '#dc2626'};font-weight:600;">${item.admitted ? '✅ 已录取' : '❌ 未录取'}</td>
+                <td>${item.schedule_date || '-'}</td>
+                <td>${item.schedule_time || '-'}</td>
+                <td>${item.created_at || '-'}</td>
+            </tr>
+        `).join('');
+
+        renderLogPagination(data.total, page);
+    } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">加载失败，请刷新重试</td></tr>';
+    }
+}
+
+function renderLogPagination(total, page) {
+    const pagination = document.getElementById('logPagination');
+    const perPage = 50;
+    const totalPages = Math.ceil(total / perPage);
+
+    if (totalPages <= 1) {
+        pagination.innerHTML = `<span class="page-info">共 ${total} 条</span>`;
+        return;
+    }
+
+    let html = '';
+    html += `<button class="page-btn" onclick="loadLogs(1)" ${page === 1 ? 'disabled' : ''}>«</button>`;
+    html += `<button class="page-btn" onclick="loadLogs(${page - 1})" ${page === 1 ? 'disabled' : ''}>‹</button>`;
+
+    const start = Math.max(1, page - 2);
+    const end = Math.min(totalPages, page + 2);
+    for (let i = start; i <= end; i++) {
+        html += `<button class="page-btn${i === page ? ' active' : ''}" onclick="loadLogs(${i})">${i}</button>`;
+    }
+
+    html += `<button class="page-btn" onclick="loadLogs(${page + 1})" ${page === totalPages ? 'disabled' : ''}>›</button>`;
+    html += `<button class="page-btn" onclick="loadLogs(${totalPages})" ${page === totalPages ? 'disabled' : ''}>»</button>`;
+    html += `<span class="page-info">共 ${total} 条</span>`;
+
+    pagination.innerHTML = html;
+}
+
+function debounceLogSearch() {
+    logSearchTerm = document.getElementById('logSearchInput').value.trim();
+    clearTimeout(logSearchTimer);
+    logSearchTimer = setTimeout(() => loadLogs(1), 300);
+}
+
+function doExportLogs() {
+    window.location.href = '/api/admin/logs/export';
 }

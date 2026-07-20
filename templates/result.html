@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>英才计划录取通知书</title>
-    <link rel="stylesheet" href="/static/css/result-theme.css">
+    <link rel="stylesheet" href="/static/css/result-theme.css?v={{ app_version }}">
 </head>
 <body>
     <div class="page">
         <!-- 顶部红色卡片区域 -->
         <div class="red-card">
             <header class="red-card-header">
-                <img src="/static/img/logo.png" alt="北大-点猫科技" class="logo-img">
+                <img src="/static/img/logo.png?v={{ app_version }}" alt="北大-点猫科技" class="logo-img">
             </header>
             <h1 class="result-title">英才计划录取通知书</h1>
         </div>
@@ -39,11 +39,11 @@
                 </div>
                 <div class="archive-item">
                     <span class="archive-label">综合成绩</span>
-                    <span class="archive-value grade">A+</span>
+                    <span class="archive-value grade" id="archiveGrade">A+</span>
                 </div>
                 <div class="archive-item">
                     <span class="archive-label">综合得分</span>
-                    <span class="archive-value">93.3</span>
+                    <span class="archive-value" id="archiveScore">93.3</span>
                 </div>
                 <div class="archive-item">
                     <span class="archive-label">录取结果</span>
@@ -107,10 +107,14 @@
         const params = new URLSearchParams(window.location.search);
         const name = params.get('name') || '';
         const category = params.get('category') || '科特班·英才计划';
+        const grade = params.get('grade') || 'A+';
+        const score = params.get('score') || '93.3';
 
         document.getElementById('resultName').textContent = name;
         document.getElementById('archiveName').textContent = name;
         if (category) document.getElementById('archiveCategory').textContent = category;
+        if (grade) document.getElementById('archiveGrade').textContent = grade;
+        if (score) document.getElementById('archiveScore').textContent = score;
 
         // 动态显示当前日期
         const now = new Date();
@@ -129,14 +133,37 @@
             });
         });
 
-        function doConfirm() {
+        async function doConfirm() {
             const dateBtn = document.querySelector('#dateOptions .option-btn.active');
             const timeBtn = document.querySelector('#timeOptions .option-btn.active');
             const btn = document.getElementById('confirmBtn');
-            btn.textContent = '已确认 ✓';
+            const scheduleDate = dateBtn.textContent;
+            const scheduleTime = timeBtn.textContent;
+
+            btn.textContent = '提交中...';
             btn.disabled = true;
-            btn.style.opacity = '0.8';
-            alert(`已确认上课安排：${dateBtn.textContent} ${timeBtn.textContent}\n老师将尽快与您联系！`);
+
+            try {
+                const resp = await fetch('/api/schedule/confirm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, date: scheduleDate, time: scheduleTime })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    btn.textContent = '已确认 ✓';
+                    btn.style.opacity = '0.8';
+                    alert(`已确认上课安排：${scheduleDate} ${scheduleTime}\n老师将尽快与您联系！`);
+                } else {
+                    btn.textContent = '确认选择';
+                    btn.disabled = false;
+                    alert('提交失败，请重试');
+                }
+            } catch (err) {
+                btn.textContent = '确认选择';
+                btn.disabled = false;
+                alert('网络错误，请重试');
+            }
         }
     </script>
 </body>
