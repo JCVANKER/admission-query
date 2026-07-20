@@ -23,11 +23,6 @@
         <!-- 上传区域 -->
         <div class="admin-section">
             <h3>📤 上传录取名单</h3>
-            <div class="upload-tabs">
-                <button class="tab-btn active" onclick="switchTab('text')">文本粘贴</button>
-                <button class="tab-btn" onclick="switchTab('csv')">CSV 粘贴</button>
-                <button class="tab-btn" onclick="switchTab('file')">文件上传</button>
-            </div>
 
             <!-- 班型选择 -->
             <div class="class-select" style="margin-bottom:12px;">
@@ -40,21 +35,22 @@
                 </label>
             </div>
 
-            <!-- 文本模式 -->
-            <div class="tab-panel active" id="panel-text">
-                <p class="tab-hint">每行一个姓名，格式：<code>姓名</code> 或 <code>姓名,类别</code></p>
-                <textarea id="textInput" rows="8" placeholder="张三&#10;李四&#10;王五,本科一批&#10;赵六,本科二批"></textarea>
+            <!-- 上传方式切换 -->
+            <div class="upload-tabs" style="margin-bottom:12px;">
+                <button class="tab-btn active" onclick="switchUploadTab('text')">文本粘贴</button>
+                <button class="tab-btn" onclick="switchUploadTab('file')">文件上传</button>
+                <a href="/static/template.csv" download class="tab-btn" style="text-decoration:none;margin-left:auto;">📥 下载模板</a>
             </div>
 
-            <!-- CSV模式 -->
-            <div class="tab-panel" id="panel-csv">
-                <p class="tab-hint">粘贴 CSV 内容，第一行为表头：<code>姓名,类别</code></p>
-                <textarea id="csvInput" rows="8" placeholder="姓名,类别&#10;张三,本科一批&#10;李四,本科二批"></textarea>
+            <!-- 文本模式 -->
+            <div class="tab-panel active" id="upload-panel-text">
+                <p class="tab-hint">每行一个姓名。也可从 Excel 复制粘贴。</p>
+                <textarea id="textInput" rows="8" placeholder="张三&#10;李四&#10;王五&#10;赵六"></textarea>
             </div>
 
             <!-- 文件模式 -->
-            <div class="tab-panel" id="panel-file">
-                <p class="tab-hint">支持 .txt 或 .csv 文件</p>
+            <div class="tab-panel" id="upload-panel-file" style="display:none;">
+                <p class="tab-hint">支持上传 .txt 或 .csv 文件，每行一个姓名</p>
                 <div class="file-drop-zone" id="dropZone">
                     <p>📂 点击选择文件或拖拽到此处</p>
                     <input type="file" id="fileInput" accept=".txt,.csv" style="display:none;">
@@ -74,7 +70,13 @@
                 <div class="search-box">
                     <input type="text" id="searchInput" placeholder="搜索姓名..." oninput="debounceSearch()">
                 </div>
+                <select id="listClassFilter" onchange="loadList(1)" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;">
+                    <option value="">全部班型</option>
+                    <option value="kete">科特班</option>
+                    <option value="yucai">育才班</option>
+                </select>
                 <div class="toolbar-actions">
+                    <button class="btn-danger-outline" onclick="doBatchDelete()">🗑 批量删除</button>
                     <button class="btn-danger-outline" onclick="doClearAll()">🗑 清空全部</button>
                 </div>
             </div>
@@ -82,10 +84,10 @@
                 <table class="data-table" id="dataTable">
                     <thead>
                         <tr>
+                            <th style="width:40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
                             <th>ID</th>
                             <th>姓名</th>
                             <th>班型</th>
-                            <th>类别</th>
                             <th>添加时间</th>
                             <th>操作</th>
                         </tr>
@@ -105,14 +107,22 @@
                 <div class="search-box">
                     <input type="text" id="logSearchInput" placeholder="搜索姓名..." oninput="debounceLogSearch()">
                 </div>
+                <select id="logClassFilter" onchange="loadLogs(1)" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;">
+                    <option value="">全部班型</option>
+                    <option value="kete">科特班</option>
+                    <option value="yucai">育才班</option>
+                </select>
                 <div class="toolbar-actions">
                     <button class="btn-primary" onclick="doExportLogs()">📥 导出 CSV</button>
+                    <button class="btn-danger-outline" onclick="doBatchDeleteLogs()">🗑 批量删除</button>
+                    <button class="btn-danger-outline" onclick="doClearAllLogs()">🗑 清空全部</button>
                 </div>
             </div>
             <div class="table-wrapper">
                 <table class="data-table" id="logTable">
                     <thead>
                         <tr>
+                            <th style="width:40px;"><input type="checkbox" id="logSelectAll" onchange="toggleLogSelectAll()"></th>
                             <th>ID</th>
                             <th>姓名</th>
                             <th>班型</th>
@@ -123,7 +133,7 @@
                         </tr>
                     </thead>
                     <tbody id="logTableBody">
-                        <tr><td colspan="7" class="loading-cell">加载中...</td></tr>
+                        <tr><td colspan="8" class="loading-cell">加载中...</td></tr>
                     </tbody>
                 </table>
             </div>

@@ -372,13 +372,13 @@ def admin_list():
             params
         ).fetchone()["cnt"]
         rows = db.execute(
-            f"SELECT id, name, category, class_type, created_at FROM admissions WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?",
+            f"SELECT id, name, class_type, created_at FROM admissions WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?",
             params + [per_page, (page - 1) * per_page]
         ).fetchall()
     else:
         count = db.execute("SELECT COUNT(*) as cnt FROM admissions").fetchone()["cnt"]
         rows = db.execute(
-            "SELECT id, name, category, class_type, created_at FROM admissions ORDER BY id DESC LIMIT ? OFFSET ?",
+            "SELECT id, name, class_type, created_at FROM admissions ORDER BY id DESC LIMIT ? OFFSET ?",
             (per_page, (page - 1) * per_page)
         ).fetchall()
 
@@ -397,6 +397,21 @@ def admin_delete(record_id):
     db.execute("DELETE FROM admissions WHERE id = ?", (record_id,))
     db.commit()
     return jsonify({"success": True})
+
+
+@app.route("/api/admin/batch-delete", methods=["POST"])
+@api_login_required
+def admin_batch_delete():
+    """批量删除录取名单"""
+    data = request.get_json()
+    ids = data.get("ids", [])
+    if not ids:
+        return jsonify({"success": False, "message": "未选择记录"})
+    db = get_db()
+    placeholders = ",".join("?" * len(ids))
+    db.execute(f"DELETE FROM admissions WHERE id IN ({placeholders})", ids)
+    db.commit()
+    return jsonify({"success": True, "deleted": len(ids)})
 
 
 @app.route("/api/admin/clear", methods=["DELETE"])
@@ -438,17 +453,27 @@ def admin_logs():
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 50, type=int)
     search = request.args.get("search", "").strip()
+    filter_class = request.args.get("class_type", "").strip()
 
     db = get_db()
 
+    conditions = []
+    params = []
     if search:
+        conditions.append("name LIKE ?")
+        params.append(f"%{search}%")
+    if filter_class:
+        conditions.append("class_type = ?")
+        params.append(filter_class)
+
+    if conditions:
+        where = " AND ".join(conditions)
         count = db.execute(
-            "SELECT COUNT(*) as cnt FROM query_logs WHERE name LIKE ?",
-            (f"%{search}%",)
+            f"SELECT COUNT(*) as cnt FROM query_logs WHERE {where}", params
         ).fetchone()["cnt"]
         rows = db.execute(
-            "SELECT id, name, admitted, class_type, schedule_date, schedule_time, created_at FROM query_logs WHERE name LIKE ? ORDER BY id DESC LIMIT ? OFFSET ?",
-            (f"%{search}%", per_page, (page - 1) * per_page)
+            f"SELECT id, name, admitted, class_type, schedule_date, schedule_time, created_at FROM query_logs WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?",
+            params + [per_page, (page - 1) * per_page]
         ).fetchall()
     else:
         count = db.execute("SELECT COUNT(*) as cnt FROM query_logs").fetchone()["cnt"]
@@ -492,6 +517,31 @@ def admin_logs_export():
     resp.headers["Content-Type"] = "text/csv; charset=utf-8-sig"
     resp.headers["Content-Disposition"] = "attachment; filename=query_logs.csv"
     return resp
+
+
+@app.route("/api/admin/logs/batch-delete", methods=["POST"])
+@api_login_required
+def admin_logs_batch_delete():
+    """批量删除查询日志"""
+    data = request.get_json()
+    ids = data.get("ids", [])
+    if not ids:
+        return jsonify({"success": False, "message": "未选择记录"})
+    db = get_db()
+    placeholders = ",".join("?" * len(ids))
+    db.execute(f"DELETE FROM query_logs WHERE id IN ({placeholders})", ids)
+    db.commit()
+    return jsonify({"success": True, "deleted": len(ids)})
+
+
+@app.route("/api/admin/logs/clear", methods=["DELETE"])
+@api_login_required
+def admin_logs_clear():
+    """清空全部查询日志"""
+    db = get_db()
+    db.execute("DELETE FROM query_logs")
+    db.commit()
+    return jsonify({"success": True})
 
 
 # ──────────────────── 启动 ────────────────────
