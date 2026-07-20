@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>英才计划录取通知书</title>
+    <link rel="stylesheet" href="/static/css/result-theme.css">
+</head>
+<body>
+    <div class="page">
+        <!-- 顶部红色卡片区域 -->
+        <div class="red-card">
+            <header class="red-card-header">
+                <img src="/static/img/logo.png" alt="北大-点猫科技" class="logo-img">
+            </header>
+            <h1 class="result-title">英才计划录取通知书</h1>
+        </div>
+
+        <!-- 恭喜区域 -->
+        <div class="congrats-section">
+            <p class="congrats-label">恭喜</p>
+            <h2 class="student-name" id="resultName">--</h2>
+            <p class="congrats-badge">已获得英才计划录取资格</p>
+            <p class="congrats-welcome">期待你的加入，一起开启编程之旅！</p>
+        </div>
+
+        <!-- 录取档案 -->
+        <div class="archive-section">
+            <div class="archive-header">
+                <h3>录取档案</h3>
+                <div class="archive-line"></div>
+            </div>
+            <p class="archive-subtitle">展示成绩、录取详情与后续学习目标</p>
+
+            <div class="archive-list">
+                <div class="archive-item">
+                    <span class="archive-label">学生姓名</span>
+                    <span class="archive-value highlight" id="archiveName">--</span>
+                </div>
+                <div class="archive-item">
+                    <span class="archive-label">综合成绩</span>
+                    <span class="archive-value grade">A+</span>
+                </div>
+                <div class="archive-item">
+                    <span class="archive-label">综合得分</span>
+                    <span class="archive-value">93.3</span>
+                </div>
+                <div class="archive-item">
+                    <span class="archive-label">录取结果</span>
+                    <span class="archive-value highlight" id="archiveCategory">科特班·英才计划</span>
+                </div>
+                <div class="archive-item block">
+                    <span class="archive-label">录取详情</span>
+                    <span class="archive-desc">恭喜你在北京大学联合人工智能教育实验室的英才计划选拔中获得录取资格。</span>
+                </div>
+                <div class="archive-item block">
+                    <span class="archive-label">学习目标</span>
+                    <span class="archive-desc">半年冲刺三项学习成果，提供专供教育部白名单赛事与国家级考级资源支持，在锻炼思维能力、提升学习成绩的同时，帮助孩子迅速获得科技特长认证。</span>
+                </div>
+                <div class="archive-item block">
+                    <span class="archive-label">英才计划简介</span>
+                    <span class="archive-desc">英才计划是编程猫在"北京大学与点猫科技联合共建人工智能实验室"的背景下，全新设立的人才选拔培养班型。面向在编程学习中展现出突出思维能力和探索兴趣的孩子，通过专项能力评估后入班。入班学员可优先享受北京大学与点猫科技联合共建人工智能实验室最新研发成果、教研资源及赛事通道。<br><br>本班型一年只招生一次，通过了我们这次的审核进班之后，不仅仅是学编程，更是进入了这个联合实验室设计共研的信息学或AI科创的人才培养体系，为未来的升学和成长打下坚实基础。</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 上课安排 -->
+        <div class="schedule-section">
+            <h3 class="schedule-title">选择上课安排</h3>
+            <p class="schedule-hint">请选择日期和时段，确认后老师会优先核对。</p>
+
+            <div class="schedule-group">
+                <p class="schedule-label">日期</p>
+                <div class="schedule-options" id="dateOptions">
+                    <button class="option-btn active" data-value="周一">周一</button>
+                    <button class="option-btn" data-value="周四">周四</button>
+                    <button class="option-btn" data-value="周五">周五</button>
+                    <button class="option-btn" data-value="周六">周六</button>
+                    <button class="option-btn" data-value="周日">周日</button>
+                </div>
+            </div>
+
+            <div class="schedule-group">
+                <p class="schedule-label">时段</p>
+                <div class="schedule-options" id="timeOptions">
+                    <button class="option-btn active" data-value="14:00-15:00">14:00-15:00</button>
+                    <button class="option-btn" data-value="15:00-16:00">15:00-16:00</button>
+                    <button class="option-btn" data-value="17:00-18:00">17:00-18:00</button>
+                    <button class="option-btn" data-value="18:00-19:00">18:00-19:00</button>
+                    <button class="option-btn" data-value="19:00-20:00">19:00-20:00</button>
+                    <button class="option-btn" data-value="20:00-21:00">20:00-21:00</button>
+                </div>
+            </div>
+
+            <button class="btn-confirm" id="confirmBtn" onclick="doConfirm()">确认选择</button>
+        </div>
+
+        <!-- 底部 -->
+        <footer class="result-footer">
+            <p class="result-date" id="resultDate">--</p>
+            <a href="/" class="btn-back">返回查询</a>
+        </footer>
+    </div>
+
+    <script>
+        // 从 URL 参数读取查询结果
+        const params = new URLSearchParams(window.location.search);
+        const name = params.get('name') || '';
+        const category = params.get('category') || '科特班·英才计划';
+
+        document.getElementById('resultName').textContent = name;
+        document.getElementById('archiveName').textContent = name;
+        if (category) document.getElementById('archiveCategory').textContent = category;
+
+        // 动态显示当前日期
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+        const day = now.getDate();
+        document.getElementById('resultDate').textContent = `${year}年${month}月${day}日`;
+
+        // 日期和时段选择
+        document.querySelectorAll('.schedule-options').forEach(group => {
+            group.addEventListener('click', (e) => {
+                if (e.target.classList.contains('option-btn')) {
+                    group.querySelectorAll('.option-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                }
+            });
+        });
+
+        function doConfirm() {
+            const dateBtn = document.querySelector('#dateOptions .option-btn.active');
+            const timeBtn = document.querySelector('#timeOptions .option-btn.active');
+            const btn = document.getElementById('confirmBtn');
+            btn.textContent = '已确认 ✓';
+            btn.disabled = true;
+            btn.style.opacity = '0.8';
+            alert(`已确认上课安排：${dateBtn.textContent} ${timeBtn.textContent}\n老师将尽快与您联系！`);
+        }
+    </script>
+</body>
+</html>

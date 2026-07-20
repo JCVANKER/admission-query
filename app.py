@@ -65,6 +65,14 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/result")
+def result_page():
+    """录取结果页（独立页面）"""
+    name = request.args.get("name", "")
+    category = request.args.get("category", "")
+    return render_template("result.html", name=name, category=category)
+
+
 @app.route("/api/query")
 def query():
     """查询是否被录取"""

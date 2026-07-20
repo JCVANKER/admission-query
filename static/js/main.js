@@ -27,45 +27,37 @@ async function doQuery() {
         const resp = await fetch(`/api/query?${params.toString()}`);
         const data = await resp.json();
 
-        resultArea.style.display = 'block';
-
         if (!data.success) {
-            resultCard.className = 'result-card fail';
-            resultCard.innerHTML = `
-                <div class="result-icon">⚠️</div>
-                <h2>${data.message}</h2>
-            `;
+            showFailResult(data.message);
         } else if (data.admitted) {
-            resultCard.className = 'result-card success';
-            let detailHtml = `<p><strong>姓名：</strong>${escapeHtml(data.name)}</p>`;
-            if (data.category) detailHtml += `<p><strong>类别：</strong>${escapeHtml(data.category)}</p>`;
-            resultCard.innerHTML = `
-                <div class="result-icon">🎉</div>
-                <h2>恭喜！您已被录取！</h2>
-                <div class="result-detail">${detailHtml}</div>
-            `;
+            // 录取成功 → 跳转到独立结果页
+            const redirectParams = new URLSearchParams();
+            redirectParams.set('name', data.name);
+            if (data.category) redirectParams.set('category', data.category);
+            window.location.href = '/result?' + redirectParams.toString();
+            return;
         } else {
-            resultCard.className = 'result-card fail';
-            resultCard.innerHTML = `
-                <div class="result-icon">😞</div>
-                <h2>未查询到录取信息</h2>
-                <p style="color:rgba(255,255,255,0.6);margin-top:8px;font-size:0.85rem;">请核对姓名是否正确</p>
-            `;
+            showFailResult('未查询到录取信息', '请核对姓名是否正确');
         }
-
-        // 滚动到结果
-        resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
     } catch (err) {
-        resultArea.style.display = 'block';
-        resultCard.className = 'result-card fail';
-        resultCard.innerHTML = `
-            <div class="result-icon">⚠️</div>
-            <h2>网络错误，请稍后重试</h2>
-        `;
+        showFailResult('网络错误，请稍后重试');
     } finally {
         queryBtn.disabled = false;
         queryBtn.textContent = '查询录取结果';
     }
+}
+
+function showFailResult(title, subtitle) {
+    const resultArea = document.getElementById('resultArea');
+    const resultCard = document.getElementById('resultCard');
+    resultCard.className = 'result-card fail';
+    let html = `<div class="result-icon">😞</div><h2>${title}</h2>`;
+    if (subtitle) {
+        html += `<p style="color:rgba(255,255,255,0.6);margin-top:8px;font-size:0.85rem;">${subtitle}</p>`;
+    }
+    resultCard.innerHTML = html;
+    resultArea.style.display = 'block';
+    resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 // 回车触发查询
@@ -75,7 +67,7 @@ document.getElementById('nameInput').addEventListener('keydown', (e) => {
 
 function shakeElement(el) {
     el.style.animation = 'none';
-    el.offsetHeight; // reflow
+    el.offsetHeight;
     el.style.animation = 'shake 0.4s ease';
     setTimeout(() => { el.style.animation = ''; }, 400);
 }

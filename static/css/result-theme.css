@@ -1,0 +1,366 @@
+/* ═══════════════════════════════════════════
+   录取查询系统 - 录取通知书结果页样式
+   精确匹配模板设计
+   ═══════════════════════════════════════════ */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; -webkit-text-size-adjust: 100%; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+    min-height: 100vh;
+    background: #c53a2a;
+    color: #333;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+.page {
+    max-width: 420px;
+    margin: 0 auto;
+    min-height: 100vh;
+}
+
+@media (min-width: 768px) {
+    .page { max-width: 480px; }
+}
+
+/* ═══════════════════════════════════════════
+   顶部红色卡片区域（全宽，金色细边框）
+   ═══════════════════════════════════════════ */
+
+.red-card {
+    background: #c53a2a;
+    border: 1px solid #d4a84b;
+    border-radius: 0 0 16px 16px;
+    text-align: center;
+    padding: 16px 16px 20px;
+    position: relative;
+    z-index: 2;
+}
+
+.red-card-header {
+    margin-bottom: 16px;
+}
+
+.logo-img {
+    max-width: 220px;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+
+.result-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #f5d78e;
+    letter-spacing: 0.08em;
+}
+
+/* ═══════════════════════════════════════════
+   恭喜区域（米色背景，与红色卡片紧密衔接）
+   ═══════════════════════════════════════════ */
+
+.congrats-section {
+    background: #fef3e8;
+    text-align: center;
+    padding: 28px 20px 24px;
+    border-radius: 16px;
+    margin: 8px 12px 0;
+    position: relative;
+    z-index: 1;
+}
+
+.congrats-label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #666;
+    margin-bottom: 4px;
+}
+
+.student-name {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #c53a2a;
+    margin-bottom: 10px;
+    letter-spacing: 0.05em;
+}
+
+.congrats-badge {
+    display: inline-block;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #059669;
+    background: rgba(5, 150, 105, 0.08);
+    padding: 6px 18px;
+    border-radius: 20px;
+    margin-bottom: 10px;
+}
+
+.congrats-welcome {
+    font-size: 0.85rem;
+    color: #888;
+}
+
+/* ═══════════════════════════════════════════
+   录取档案
+   ═══════════════════════════════════════════ */
+
+.archive-section {
+    background: #fdf6ed;
+    padding: 20px 16px 24px;
+    border-radius: 16px;
+    margin: 8px 12px 0;
+}
+
+.archive-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.archive-header h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #5c1a0e;
+}
+
+.archive-line {
+    width: 40px;
+    height: 3px;
+    background: #c53a2a;
+    border-radius: 2px;
+}
+
+.archive-subtitle {
+    font-size: 0.78rem;
+    color: #999;
+    margin-bottom: 14px;
+}
+
+.archive-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.archive-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #fff;
+    border: 1px solid #f0e0d0;
+    border-radius: 10px;
+    padding: 12px 14px;
+}
+
+.archive-item.block {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.archive-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #8b6914;
+    min-width: 64px;
+    flex-shrink: 0;
+}
+
+.archive-value {
+    font-size: 0.9rem;
+    color: #333;
+    font-weight: 500;
+}
+
+.archive-value.highlight {
+    color: #c53a2a;
+    font-weight: 700;
+}
+
+.archive-value.grade {
+    color: #c53a2a;
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.archive-desc {
+    font-size: 0.82rem;
+    color: #666;
+    line-height: 1.6;
+}
+
+/* ═══════════════════════════════════════════
+   上课安排
+   ═══════════════════════════════════════════ */
+
+.schedule-section {
+    background: #fef9f3;
+    padding: 20px 16px 24px;
+    border-radius: 16px;
+    margin: 8px 12px 0;
+}
+
+.schedule-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #5c1a0e;
+    margin-bottom: 4px;
+}
+
+.schedule-hint {
+    font-size: 0.78rem;
+    color: #999;
+    margin-bottom: 16px;
+}
+
+.schedule-group {
+    margin-bottom: 14px;
+}
+
+.schedule-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #666;
+    margin-bottom: 8px;
+}
+
+.schedule-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.option-btn {
+    padding: 8px 14px;
+    font-size: 0.82rem;
+    color: #666;
+    background: #fff;
+    border: 1px solid #e0d0c0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.option-btn:hover {
+    border-color: #c53a2a;
+    color: #c53a2a;
+}
+
+.option-btn.active {
+    background: #c53a2a;
+    color: #fff;
+    border-color: #c53a2a;
+    font-weight: 600;
+}
+
+/* 确认按钮 */
+.btn-confirm {
+    display: block;
+    width: 100%;
+    height: 48px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(135deg, #d4a84b 0%, #c9983a 100%);
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    margin-top: 16px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-confirm:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(212, 168, 75, 0.3);
+}
+
+.btn-confirm:active {
+    transform: translateY(0);
+}
+
+.btn-confirm:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* ═══════════════════════════════════════════
+   底部
+   ═══════════════════════════════════════════ */
+
+.result-footer {
+    background: #fdf6ed;
+    text-align: center;
+    padding: 16px 20px 24px;
+    border-radius: 16px;
+    margin: 8px 12px 20px;
+}
+
+.result-date {
+    font-size: 0.8rem;
+    color: #999;
+    margin-bottom: 12px;
+}
+
+.btn-back {
+    display: inline-block;
+    padding: 10px 40px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #c53a2a;
+    background: #fff;
+    border: 2px solid #c53a2a;
+    border-radius: 24px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-back:hover {
+    background: #c53a2a;
+    color: #fff;
+}
+
+/* ═══════════════════════════════════════════
+   动画
+   ═══════════════════════════════════════════ */
+
+.congrats-section,
+.archive-section,
+.schedule-section {
+    animation: fadeInUp 0.5s ease;
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.student-name {
+    animation: scaleIn 0.6s ease 0.1s both;
+}
+
+@keyframes scaleIn {
+    0% { transform: scale(0.8); opacity: 0; }
+    60% { transform: scale(1.05); }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* 键盘可用性 */
+:focus-visible {
+    outline: 2px solid #c53a2a;
+    outline-offset: 2px;
+}
+
+/* 打印 */
+@media print {
+    body { background: #fff; }
+    .btn-confirm, .btn-back { display: none; }
+}

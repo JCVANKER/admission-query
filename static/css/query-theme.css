@@ -36,81 +36,26 @@ body {
 /* ── 顶部 Logo 栏 ── */
 .top-bar {
     text-align: center;
-    padding-bottom: 16px;
+    padding: 8px 0 4px;
 }
 
-.logo-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    margin-bottom: 6px;
+.logo-img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
 }
 
-.logo-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.logo-circle {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border: 2px solid rgba(255,255,255,0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: #fff;
-    flex-shrink: 0;
-}
-
-.logo-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.15);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.7rem;
-    color: #fff;
-    flex-shrink: 0;
-}
-
-.logo-text {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1px;
-}
-
-.logo-name {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #fff;
-    letter-spacing: 0.05em;
-}
-
-.logo-en {
-    font-size: 0.55rem;
-    color: rgba(255,255,255,0.7);
-    letter-spacing: 0.08em;
-}
-
-.logo-divider {
-    width: 1px;
-    height: 28px;
-    background: rgba(255,255,255,0.3);
-}
-
-.lab-name {
-    font-size: 0.75rem;
-    color: rgba(255,255,255,0.75);
-    letter-spacing: 0.1em;
-}
+/* 旧样式保留但不再使用 */
+.logo-row { display: none; }
+.logo-item { display: none; }
+.logo-circle { display: none; }
+.logo-icon { display: none; }
+.logo-text { display: none; }
+.logo-name { display: none; }
+.logo-en { display: none; }
+.logo-divider { display: none; }
+.lab-name { display: none; }
 
 /* ── 主内容区 ── */
 .main-content {
