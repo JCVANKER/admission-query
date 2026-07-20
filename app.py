@@ -49,6 +49,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             category TEXT DEFAULT '',
+            class_type TEXT DEFAULT 'kete',
             grade TEXT DEFAULT '',
             score TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -59,14 +60,32 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             admitted INTEGER DEFAULT 0,
+            class_type TEXT DEFAULT '',
             schedule_date TEXT DEFAULT '',
             schedule_time TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         CREATE INDEX IF NOT EXISTS idx_query_logs_name ON query_logs(name);
     """)
+    # 兼容旧数据库：如果 admissions 表没有 class_type 列，自动添加
+    try:
+        db.execute("SELECT class_type FROM admissions LIMIT 1")
+    except sqlite3.OperationalError:
+        db.execute("ALTER TABLE admissions ADD COLUMN class_type TEXT DEFAULT 'kete'")
+    try:
+        db.execute("SELECT class_type FROM query_logs LIMIT 1")
+    except sqlite3.OperationalError:
+        db.execute("ALTER TABLE query_logs ADD COLUMN class_type TEXT DEFAULT ''")
     db.commit()
     db.close()
+
+
+# ──────────────────── 班型配置 ────────────────────
+
+CLASS_TYPES = {
+    "kete": {"name": "科特班", "title": "科特班·英才计划录取结果查询", "category": "科特班·英才计划"},
+    "yucai": {"name": "育才班", "title": "育才班·英才计划录取结果查询", "category": "育才班·英才计划"},
+}
 
 
 # ──────────────────── 辅助函数 ────────────────────
@@ -107,69 +126,12 @@ def api_login_required(f):
 # ──────────────────── 前端路由 ────────────────────
 
 @app.route("/")
-def index():
-    """用户查询首页"""
-    return render_template("index.html")
+def root():
+    """根路径跳转到默认班型（科特班）"""
+    return redirect("/kete")
 
 
-@app.route("/result")
-def result_page():
-    """录取结果页（独立页面）"""
-    name = request.args.get("name", "")
-    category = request.args.get("category", "")
-    grade = request.args.get("grade", "")
-    score = request.args.get("score", "")
-    return render_template("result.html", name=name, category=category, grade=grade, score=score)
-
-
-@app.route("/api/query")
-def query():
-    """查询是否被录取"""
-    name = request.args.get("name", "").strip()
-
-    if not name:
-        return jsonify({"success": False, "message": "请输入姓名"})
-
-    db = get_db()
-    row = db.execute("SELECT name, category, grade, score FROM admissions WHERE name = ?", (name,)).fetchone()
-
-    if row:
-        # 已有记录，返回固定值
-        grade = row["grade"] or generate_grade()
-        score = row["score"] or str(generate_score())
-        # 如果之前没有生成过，更新到数据库
-        if not row["grade"] or not row["score"]:
-            db.execute(
-                "UPDATE admissions SET grade = ?, score = ? WHERE name = ?",
-                (grade, score, name)
-            )
-            db.commit()
-        # 记录查询日志
-        db.execute(
-            "INSERT INTO query_logs (name, admitted) VALUES (?, 1)",
-            (name,)
-        )
-        db.commit()
-        return jsonify({
-            "success": True,
-            "admitted": True,
-            "name": row["name"],
-            "category": row["category"],
-            "grade": grade,
-            "score": score
-        })
-    else:
-        # 记录未录取查询
-        db.execute(
-            "INSERT INTO query_logs (name, admitted) VALUES (?, 0)",
-            (name,)
-        )
-        db.commit()
-        return jsonify({"success": True, "admitted": False, "message": "未查询到录取信息"})
-
-
-# ──────────────────── 管理后台路由 ────────────────────
-
+# ⚠️ /admin 必须在 /<class_type> 之前注册，否则会被捕获为 class_type="admin"
 @app.route("/admin")
 def admin_login_page():
     return render_template("admin_login.html")
@@ -199,12 +161,98 @@ def admin_dashboard():
     return render_template("admin_dashboard.html")
 
 
+@app.route("/<class_type>")
+def index(class_type):
+    """用户查询首页，class_type 区分班型"""
+    if class_type not in CLASS_TYPES:
+        return redirect("/kete")
+    ct = CLASS_TYPES[class_type]
+    return render_template("index.html", class_type=class_type, class_name=ct["name"], page_title=ct["title"])
+
+
+@app.route("/<class_type>/result")
+def result_page(class_type):
+    """录取结果页（独立页面）"""
+    if class_type not in CLASS_TYPES:
+        return redirect("/kete/result")
+    ct = CLASS_TYPES[class_type]
+    name = request.args.get("name", "")
+    category = request.args.get("category", ct["category"])
+    grade = request.args.get("grade", "")
+    score = request.args.get("score", "")
+    return render_template("result.html",
+        class_type=class_type,
+        class_name=ct["name"],
+        category=category,
+        name=name,
+        grade=grade,
+        score=score)
+
+
+@app.route("/api/query")
+def query():
+    """查询是否被录取"""
+    name = request.args.get("name", "").strip()
+    class_type = request.args.get("class_type", "kete").strip()
+
+    if not name:
+        return jsonify({"success": False, "message": "请输入姓名"})
+
+    db = get_db()
+    row = db.execute(
+        "SELECT name, category, class_type, grade, score FROM admissions WHERE name = ? AND class_type = ?",
+        (name, class_type)
+    ).fetchone()
+
+    if row:
+        # 已有记录，返回固定值
+        grade = row["grade"] or generate_grade()
+        score = row["score"] or str(generate_score())
+        # 如果之前没有生成过，更新到数据库
+        if not row["grade"] or not row["score"]:
+            db.execute(
+                "UPDATE admissions SET grade = ?, score = ? WHERE name = ? AND class_type = ?",
+                (grade, score, name, class_type)
+            )
+            db.commit()
+        # 记录查询日志
+        ct = CLASS_TYPES.get(class_type, CLASS_TYPES["kete"])
+        category = row["category"] or ct["category"]
+        db.execute(
+            "INSERT INTO query_logs (name, admitted, class_type) VALUES (?, 1, ?)",
+            (name, class_type)
+        )
+        db.commit()
+        return jsonify({
+            "success": True,
+            "admitted": True,
+            "name": row["name"],
+            "category": category,
+            "class_type": class_type,
+            "grade": grade,
+            "score": score
+        })
+    else:
+        # 记录未录取查询
+        db.execute(
+            "INSERT INTO query_logs (name, admitted, class_type) VALUES (?, 0, ?)",
+            (name, class_type)
+        )
+        db.commit()
+        return jsonify({"success": True, "admitted": False, "message": "未查询到录取信息"})
+
+
+# ──────────────────── 管理后台 API ────────────────────
+
+
 @app.route("/api/admin/stats")
 @api_login_required
 def admin_stats():
     db = get_db()
     total = db.execute("SELECT COUNT(*) as cnt FROM admissions").fetchone()["cnt"]
-    return jsonify({"total": total})
+    kete = db.execute("SELECT COUNT(*) as cnt FROM admissions WHERE class_type = 'kete'").fetchone()["cnt"]
+    yucai = db.execute("SELECT COUNT(*) as cnt FROM admissions WHERE class_type = 'yucai'").fetchone()["cnt"]
+    return jsonify({"total": total, "kete": kete, "yucai": yucai})
 
 
 @app.route("/api/admin/upload", methods=["POST"])
@@ -216,6 +264,8 @@ def admin_upload():
         return jsonify({"success": False, "message": "未收到数据"})
 
     names = data["names"]
+    class_type = data.get("class_type", "kete")
+
     if not names:
         return jsonify({"success": False, "message": "名单为空"})
 
@@ -231,15 +281,21 @@ def admin_upload():
         if not name:
             continue
 
-        # 检查重复（按姓名去重）
-        existing = db.execute("SELECT id FROM admissions WHERE name = ?", (name,)).fetchone()
+        # 检查重复（同班型按姓名去重）
+        existing = db.execute(
+            "SELECT id FROM admissions WHERE name = ? AND class_type = ?",
+            (name, class_type)
+        ).fetchone()
 
         if existing:
             skipped += 1
             continue
 
         try:
-            db.execute("INSERT INTO admissions (name, category) VALUES (?, ?)", (name, category))
+            db.execute(
+                "INSERT INTO admissions (name, category, class_type) VALUES (?, ?, ?)",
+                (name, category, class_type)
+            )
             inserted += 1
         except Exception as e:
             errors.append(str(e))
@@ -261,22 +317,32 @@ def admin_list():
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 50, type=int)
     search = request.args.get("search", "").strip()
+    filter_class = request.args.get("class_type", "").strip()
 
     db = get_db()
 
-    if search:
+    if search or filter_class:
+        conditions = []
+        params = []
+        if search:
+            conditions.append("name LIKE ?")
+            params.append(f"%{search}%")
+        if filter_class:
+            conditions.append("class_type = ?")
+            params.append(filter_class)
+        where = " AND ".join(conditions)
         count = db.execute(
-            "SELECT COUNT(*) as cnt FROM admissions WHERE name LIKE ?",
-            (f"%{search}%",)
+            f"SELECT COUNT(*) as cnt FROM admissions WHERE {where}",
+            params
         ).fetchone()["cnt"]
         rows = db.execute(
-            "SELECT id, name, category, created_at FROM admissions WHERE name LIKE ? ORDER BY id DESC LIMIT ? OFFSET ?",
-            (f"%{search}%", per_page, (page - 1) * per_page)
+            f"SELECT id, name, category, class_type, created_at FROM admissions WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?",
+            params + [per_page, (page - 1) * per_page]
         ).fetchall()
     else:
         count = db.execute("SELECT COUNT(*) as cnt FROM admissions").fetchone()["cnt"]
         rows = db.execute(
-            "SELECT id, name, category, created_at FROM admissions ORDER BY id DESC LIMIT ? OFFSET ?",
+            "SELECT id, name, category, class_type, created_at FROM admissions ORDER BY id DESC LIMIT ? OFFSET ?",
             (per_page, (page - 1) * per_page)
         ).fetchall()
 
@@ -345,13 +411,13 @@ def admin_logs():
             (f"%{search}%",)
         ).fetchone()["cnt"]
         rows = db.execute(
-            "SELECT id, name, admitted, schedule_date, schedule_time, created_at FROM query_logs WHERE name LIKE ? ORDER BY id DESC LIMIT ? OFFSET ?",
+            "SELECT id, name, admitted, class_type, schedule_date, schedule_time, created_at FROM query_logs WHERE name LIKE ? ORDER BY id DESC LIMIT ? OFFSET ?",
             (f"%{search}%", per_page, (page - 1) * per_page)
         ).fetchall()
     else:
         count = db.execute("SELECT COUNT(*) as cnt FROM query_logs").fetchone()["cnt"]
         rows = db.execute(
-            "SELECT id, name, admitted, schedule_date, schedule_time, created_at FROM query_logs ORDER BY id DESC LIMIT ? OFFSET ?",
+            "SELECT id, name, admitted, class_type, schedule_date, schedule_time, created_at FROM query_logs ORDER BY id DESC LIMIT ? OFFSET ?",
             (per_page, (page - 1) * per_page)
         ).fetchall()
 
@@ -369,15 +435,16 @@ def admin_logs_export():
     """导出查询日志为 CSV"""
     db = get_db()
     rows = db.execute(
-        "SELECT name, admitted, schedule_date, schedule_time, created_at FROM query_logs ORDER BY id DESC"
+        "SELECT name, admitted, class_type, schedule_date, schedule_time, created_at FROM query_logs ORDER BY id DESC"
     ).fetchall()
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["姓名", "录取状态", "上课日期", "上课时段", "查询时间"])
+    writer.writerow(["姓名", "班型", "录取状态", "上课日期", "上课时段", "查询时间"])
     for r in rows:
         writer.writerow([
             r["name"],
+            CLASS_TYPES.get(r["class_type"], {}).get("name", r["class_type"] or "-"),
             "已录取" if r["admitted"] else "未录取",
             r["schedule_date"] or "-",
             r["schedule_time"] or "-",

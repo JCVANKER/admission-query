@@ -17,7 +17,7 @@
         <main class="main-content">
             <div class="title-group">
                 <p class="sub-title">编程猫在线教育中心</p>
-                <h1 class="main-title">科特班·英才计划录取结果查询</h1>
+                <h1 class="main-title">{{ page_title }}</h1>
                 <p class="hint-text">输入学员姓名，查看本次选拔录取结果</p>
             </div>
 
@@ -47,5 +47,9 @@
     </div>
 
     <script src="/static/js/main.js?v={{ app_version }}"></script>
+    <script>
+        // 向 main.js 传递当前班型
+        window.APP_CLASS_TYPE = '{{ class_type }}';
+    </script>
 </body>
 </html>

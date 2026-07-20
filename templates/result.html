@@ -47,7 +47,7 @@
                 </div>
                 <div class="archive-item">
                     <span class="archive-label">录取结果</span>
-                    <span class="archive-value highlight" id="archiveCategory">科特班·英才计划</span>
+                    <span class="archive-value highlight" id="archiveCategory">{{ category }}</span>
                 </div>
                 <div class="archive-item block">
                     <span class="archive-label">录取详情</span>
@@ -98,7 +98,7 @@
         <!-- 底部 -->
         <footer class="result-footer">
             <p class="result-date" id="resultDate">--</p>
-            <a href="/" class="btn-back">返回查询</a>
+            <a href="/{{ class_type }}" class="btn-back">返回查询</a>
         </footer>
     </div>
 
@@ -106,9 +106,10 @@
         // 从 URL 参数读取查询结果
         const params = new URLSearchParams(window.location.search);
         const name = params.get('name') || '';
-        const category = params.get('category') || '科特班·英才计划';
+        const category = params.get('category') || '{{ category }}';
         const grade = params.get('grade') || 'A+';
         const score = params.get('score') || '93.3';
+        const classType = '{{ class_type }}';
 
         document.getElementById('resultName').textContent = name;
         document.getElementById('archiveName').textContent = name;

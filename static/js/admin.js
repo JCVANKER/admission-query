@@ -5,6 +5,7 @@
 let currentPage = 1;
 let searchTerm = '';
 let searchTimer = null;
+let uploadClassType = 'kete';  // 当前上传班型
 
 // ── 初始化 ──
 document.addEventListener('DOMContentLoaded', () => {
@@ -12,6 +13,11 @@ document.addEventListener('DOMContentLoaded', () => {
     loadList(1);
     initFileDrop();
 });
+
+// ── 班型选择 ──
+function setUploadClassType(type) {
+    uploadClassType = type;
+}
 
 // ── 标签切换 ──
 function switchTab(tab) {
@@ -65,7 +71,7 @@ async function doUpload() {
         const resp = await fetch('/api/admin/upload', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ names })
+            body: JSON.stringify({ names, class_type: uploadClassType })
         });
         const data = await resp.json();
 
@@ -147,7 +153,7 @@ function initFileDrop() {
 async function loadList(page) {
     currentPage = page;
     const tbody = document.getElementById('tableBody');
-    tbody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载中...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">加载中...</td></tr>';
 
     try {
         const params = new URLSearchParams({ page, per_page: 50 });
@@ -158,7 +164,7 @@ async function loadList(page) {
         const data = await resp.json();
 
         if (!data.items.length) {
-            tbody.innerHTML = '<tr><td colspan="5" class="loading-cell">暂无数据</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">暂无数据</td></tr>';
             renderPagination(0, page);
             return;
         }
@@ -167,6 +173,7 @@ async function loadList(page) {
             <tr>
                 <td>${item.id}</td>
                 <td><strong>${escapeHtml(item.name)}</strong></td>
+                <td>${item.class_type === 'yucai' ? '育才班' : '科特班'}</td>
                 <td>${escapeHtml(item.category) || '-'}</td>
                 <td>${item.created_at || '-'}</td>
                 <td><button class="btn-delete" onclick="doDelete(${item.id})">删除</button></td>
@@ -175,7 +182,7 @@ async function loadList(page) {
 
         renderPagination(data.total, page);
     } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载失败，请刷新重试</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">加载失败，请刷新重试</td></tr>';
     }
 }
 
@@ -250,6 +257,8 @@ async function loadStats() {
         const resp = await fetch('/api/admin/stats');
         const data = await resp.json();
         document.getElementById('totalBadge').textContent = `总计: ${data.total} 人`;
+        document.getElementById('keteBadge').textContent = `科特班: ${data.kete} 人`;
+        document.getElementById('yucaiBadge').textContent = `育才班: ${data.yucai} 人`;
     } catch (err) { /* ignore */ }
 }
 
@@ -274,7 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadLogs(page) {
     logCurrentPage = page;
     const tbody = document.getElementById('logTableBody');
-    tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">加载中...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="loading-cell">加载中...</td></tr>';
 
     try {
         const params = new URLSearchParams({ page, per_page: 50 });
@@ -291,7 +300,7 @@ async function loadLogs(page) {
         const data = await resp.json();
 
         if (!data.items.length) {
-            tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">暂无数据</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell">暂无数据</td></tr>';
             renderLogPagination(0, page);
             return;
         }
@@ -300,6 +309,7 @@ async function loadLogs(page) {
             <tr>
                 <td>${item.id}</td>
                 <td><strong>${escapeHtml(item.name)}</strong></td>
+                <td>${item.class_type === 'yucai' ? '育才班' : item.class_type === 'kete' ? '科特班' : '-'}</td>
                 <td style="color:${item.admitted ? '#059669' : '#dc2626'};font-weight:600;">${item.admitted ? '✅ 已录取' : '❌ 未录取'}</td>
                 <td>${item.schedule_date || '-'}</td>
                 <td>${item.schedule_time || '-'}</td>
@@ -309,7 +319,7 @@ async function loadLogs(page) {
 
         renderLogPagination(data.total, page);
     } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">加载失败，请刷新重试</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="loading-cell">加载失败，请刷新重试</td></tr>';
     }
 }
 

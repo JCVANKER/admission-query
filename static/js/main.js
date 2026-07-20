@@ -9,6 +9,7 @@ async function doQuery() {
     const resultCard = document.getElementById('resultCard');
 
     const name = nameInput.value.trim();
+    const classType = window.APP_CLASS_TYPE || 'kete';
 
     if (!name) {
         shakeElement(nameInput);
@@ -23,6 +24,7 @@ async function doQuery() {
     try {
         const params = new URLSearchParams();
         params.set('name', name);
+        params.set('class_type', classType);
 
         const resp = await fetch(`/api/query?${params.toString()}`);
         const data = await resp.json();
@@ -30,13 +32,13 @@ async function doQuery() {
         if (!data.success) {
             showFailResult(data.message);
         } else if (data.admitted) {
-            // 录取成功 → 跳转到独立结果页
+            // 录取成功 → 跳转到独立结果页，保持班型路径
             const redirectParams = new URLSearchParams();
             redirectParams.set('name', data.name);
             if (data.category) redirectParams.set('category', data.category);
             if (data.grade) redirectParams.set('grade', data.grade);
             if (data.score) redirectParams.set('score', data.score);
-            window.location.href = '/result?' + redirectParams.toString();
+            window.location.href = '/' + classType + '/result?' + redirectParams.toString();
             return;
         } else {
             showFailResult('未查询到录取信息', '请核对姓名是否正确');
