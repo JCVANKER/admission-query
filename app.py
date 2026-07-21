@@ -17,6 +17,9 @@ from config import Config
 app = Flask(__name__)
 app.config.from_object(Config)
 
+# Session 过期配置
+app.config["PERMANENT_SESSION_LIFETIME"] = Config.PERMANENT_SESSION_LIFETIME
+
 # 静态文件版本号：基于 app.py 修改时间，部署更新后自动变化，强制浏览器刷新缓存
 APP_VERSION = str(int(os.path.getmtime(__file__)))
 
@@ -88,6 +91,14 @@ def init_db():
             created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
         );
 
+        CREATE TABLE IF NOT EXISTS login_attempts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ip_address TEXT NOT NULL,
+            success INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip_address, created_at);
+
         CREATE TABLE IF NOT EXISTS schema_version (
             version INTEGER PRIMARY KEY,
             applied_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
@@ -122,6 +133,10 @@ def init_db():
         ],
         4: [
             "ALTER TABLE query_logs ADD COLUMN needs TEXT DEFAULT ''",
+        ],
+        5: [
+            "CREATE TABLE IF NOT EXISTS login_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, ip_address TEXT NOT NULL, success INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')))",
+            "CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip_address, created_at)",
         ],
     }
 
@@ -248,10 +263,46 @@ def admin_login():
     data = request.get_json()
     username = data.get("username", "")
     password = data.get("password", "")
+    client_ip = request.remote_addr or "unknown"
 
-    if username == app.config["ADMIN_USERNAME"] and password == app.config["ADMIN_PASSWORD"]:
+    db = get_db()
+
+    # 检查是否被锁定：最近 LOGIN_LOCKOUT_MINUTES 分钟内连续失败 MAX_LOGIN_ATTEMPTS 次
+    lockout_cutoff = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    failed_count = db.execute(
+        """SELECT COUNT(*) as cnt FROM login_attempts
+           WHERE ip_address = ? AND success = 0
+           AND datetime(created_at, ?) > datetime('now', 'localtime')""",
+        (client_ip, f"+{app.config['LOGIN_LOCKOUT_MINUTES']} minutes")
+    ).fetchone()["cnt"]
+
+    if failed_count >= app.config["MAX_LOGIN_ATTEMPTS"]:
+        remaining = app.config["LOGIN_LOCKOUT_MINUTES"]
+        return jsonify({
+            "success": False,
+            "message": f"登录尝试次数过多，请 {remaining} 分钟后再试"
+        })
+
+    # 验证用户名 + 密码哈希
+    if username == app.config["ADMIN_USERNAME"] and check_password_hash(app.config["ADMIN_PASSWORD_HASH"], password):
         session["admin_logged_in"] = True
+        session.permanent = True  # 启用 PERMANENT_SESSION_LIFETIME
+        db.execute(
+            "INSERT INTO login_attempts (ip_address, success) VALUES (?, 1)",
+            (client_ip,)
+        )
+        db.commit()
         return jsonify({"success": True})
+
+    # 登录失败：记录并延迟响应
+    db.execute(
+        "INSERT INTO login_attempts (ip_address, success) VALUES (?, 0)",
+        (client_ip,)
+    )
+    db.commit()
+
+    # 失败后延迟 1 秒，增加暴力破解成本
+    time.sleep(1)
     return jsonify({"success": False, "message": "账号或密码错误"})
 
 
