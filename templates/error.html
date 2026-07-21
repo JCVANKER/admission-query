@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ code }} - 英才计划</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { font-size: 16px; -webkit-text-size-adjust: 100%; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                         "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #c53a2a 0%, #a83220 50%, #8a2618 100%);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            -webkit-font-smoothing: antialiased;
+        }
+        .error-card {
+            text-align: center;
+            max-width: 360px;
+        }
+        .error-code {
+            font-size: 5rem;
+            font-weight: 800;
+            color: #f5d78e;
+            line-height: 1;
+            margin-bottom: 8px;
+            letter-spacing: 0.05em;
+        }
+        .error-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+        }
+        .error-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: #fff;
+        }
+        .error-message {
+            font-size: 0.9rem;
+            color: rgba(255,255,255,0.7);
+            margin-bottom: 28px;
+            line-height: 1.6;
+        }
+        .error-btn {
+            display: inline-block;
+            padding: 12px 32px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #c53a2a;
+            background: #fff;
+            border-radius: 24px;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .error-btn:hover {
+            background: #f5d78e;
+            transform: translateY(-1px);
+        }
+    </style>
+</head>
+<body>
+    <div class="error-card">
+        <div class="error-code">{{ code }}</div>
+        <div class="error-icon">{{ '🔍' if code == 404 else '⚠️' }}</div>
+        <h1 class="error-title">{{ message }}</h1>
+        <p class="error-message">
+            {{ '您访问的页面不存在或已被移除。请检查链接是否正确。' if code == 404 else '服务器遇到了意外错误，请稍后重试。如果问题持续存在，请联系技术支持。' }}
+        </p>
+        <a href="/" class="error-btn">返回首页</a>
+    </div>
+</body>
+</html>

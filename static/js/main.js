@@ -60,7 +60,7 @@ async function doQuery() {
         const data = await resp.json();
 
         if (!data.success) {
-            // 验证码错误等，刷新验证码
+            // 验证码错误等，刷新验证码但保留姓名
             refreshCaptcha();
             captchaInput.value = '';
             showFailResult(data.message);

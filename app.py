@@ -322,7 +322,8 @@ def admin_dashboard():
 def index(class_type):
     """用户查询首页，class_type 区分班型"""
     if class_type not in CLASS_TYPES:
-        return redirect("/kete")
+        # 非已知班型，返回 404
+        return render_template("error.html", code=404, message="页面不存在"), 404
     ct = CLASS_TYPES[class_type]
     return render_template("index.html", class_type=class_type, class_name=ct["name"], page_title=ct["title"])
 
@@ -331,7 +332,7 @@ def index(class_type):
 def result_page(class_type):
     """录取结果页（独立页面）"""
     if class_type not in CLASS_TYPES:
-        return redirect("/kete/result")
+        return render_template("error.html", code=404, message="页面不存在"), 404
     ct = CLASS_TYPES[class_type]
     name = request.args.get("name", "")
     category = request.args.get("category", ct["category"])
@@ -350,7 +351,7 @@ def result_page(class_type):
 def invite_page(class_type):
     """入学邀请函独立页面"""
     if class_type not in CLASS_TYPES:
-        return redirect("/kete/invite")
+        return render_template("error.html", code=404, message="页面不存在"), 404
     ct = CLASS_TYPES[class_type]
     student_name = request.args.get("name", "")
     badge_text = f"英才计划录取资格"
@@ -502,6 +503,20 @@ def admin_stats():
         (today,)
     ).fetchone()["cnt"]
 
+    # 按班型维度的查询统计
+    kete_queries = db.execute(
+        "SELECT COUNT(*) as cnt FROM query_logs WHERE class_type = 'kete'"
+    ).fetchone()["cnt"]
+    yucai_queries = db.execute(
+        "SELECT COUNT(*) as cnt FROM query_logs WHERE class_type = 'yucai'"
+    ).fetchone()["cnt"]
+    kete_confirmed = db.execute(
+        "SELECT COUNT(*) as cnt FROM query_logs WHERE class_type = 'kete' AND needs != ''"
+    ).fetchone()["cnt"]
+    yucai_confirmed = db.execute(
+        "SELECT COUNT(*) as cnt FROM query_logs WHERE class_type = 'yucai' AND needs != ''"
+    ).fetchone()["cnt"]
+
     return jsonify({
         "total": total,
         "kete": kete,
@@ -510,7 +525,11 @@ def admin_stats():
         "total_queries": total_queries,
         "confirmed": confirmed,
         "admission_rate": admission_rate,
-        "today_new": today_new
+        "today_new": today_new,
+        "kete_queries": kete_queries,
+        "yucai_queries": yucai_queries,
+        "kete_confirmed": kete_confirmed,
+        "yucai_confirmed": yucai_confirmed
     })
 
 
@@ -887,6 +906,18 @@ def captcha_cleanup():
     db.execute("DELETE FROM captcha_store WHERE used = 0 AND datetime(created_at, '+10 minutes') < datetime('now')")
     db.commit()
     return jsonify({"success": True})
+
+
+# ──────────────────── 错误页面 ────────────────────
+
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template("error.html", code=404, message="页面不存在"), 404
+
+
+@app.errorhandler(500)
+def server_error(e):
+    return render_template("error.html", code=500, message="服务器内部错误"), 500
 
 
 # ──────────────────── 启动 ────────────────────

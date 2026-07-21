@@ -338,12 +338,53 @@ body.admin-page .container {
 @media (max-width: 640px) {
     .stats-grid {
         grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+    .stat-card {
+        padding: 12px 10px;
+    }
+    .stat-card-icon {
+        font-size: 1.2rem;
+        margin-bottom: 2px;
+    }
+    .stat-card-value {
+        font-size: 1.3rem;
+    }
+    .stat-card-label {
+        font-size: 0.72rem;
+    }
+    .list-toolbar {
+        flex-direction: column;
+        gap: 8px;
+    }
+    .toolbar-actions {
+        gap: 6px;
+    }
+    .toolbar-actions .btn-primary,
+    .toolbar-actions .btn-danger-outline {
+        padding: 6px 10px;
+        font-size: 0.78rem;
+    }
+    .btn-edit, .btn-delete {
+        padding: 3px 8px;
+        font-size: 0.72rem;
+        margin-right: 3px;
     }
 }
 
 @media (max-width: 400px) {
     .stats-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+    }
+    .stat-card {
+        padding: 10px 8px;
+    }
+    .stat-card-value {
+        font-size: 1.1rem;
+    }
+    .stat-card-label {
+        font-size: 0.68rem;
     }
 }
 
