@@ -149,14 +149,13 @@ CLASS_TYPES = {
 # ──────────────────── 辅助函数 ────────────────────
 
 def generate_grade():
-    """生成综合成绩：A-、A、A+"""
-    grades = ["A-", "A", "A+"]
-    weights = [0.2, 0.5, 0.3]  # A- 20%, A 50%, A+ 30%
-    return random.choices(grades, weights=weights)[0]
+    """生成综合成绩排名：前1% 到 前9% 随机取值"""
+    pct = random.randint(1, 9)
+    return f"前{pct}%"
 
 
 def generate_score():
-    """生成综合得分：91.3 到 97.6 之间，保留一位小数"""
+    """废弃：原综合得分，新需求改为百分比排名。保留函数以兼容旧数据读取。"""
     return round(random.uniform(91.3, 97.6), 1)
 
 
@@ -282,6 +281,27 @@ def result_page(class_type):
         score=score)
 
 
+@app.route("/<class_type>/invite")
+def invite_page(class_type):
+    """入学邀请函独立页面"""
+    if class_type not in CLASS_TYPES:
+        return redirect("/kete/invite")
+    ct = CLASS_TYPES[class_type]
+    student_name = request.args.get("name", "")
+    schedule_date = request.args.get("date", "")
+    schedule_time = request.args.get("time", "")
+    badge_text = f"{ct['name']}·英才计划录取资格"
+    today = datetime.now().strftime("%Y年%m月%d日")
+    return render_template("invite.html",
+        class_type=class_type,
+        class_name=ct["name"],
+        student_name=student_name,
+        schedule_date=schedule_date,
+        schedule_time=schedule_time,
+        badge_text=badge_text,
+        today_date=today)
+
+
 @app.route("/api/captcha")
 def get_captcha():
     """生成数学验证码，返回 token 和表达式"""
@@ -340,12 +360,11 @@ def query():
     if row:
         # 已有记录，返回固定值
         grade = row["grade"] or generate_grade()
-        score = row["score"] or str(generate_score())
         # 如果之前没有生成过，更新到数据库
-        if not row["grade"] or not row["score"]:
+        if not row["grade"]:
             db.execute(
-                "UPDATE admissions SET grade = ?, score = ? WHERE name = ? AND class_type = ?",
-                (grade, score, name, class_type)
+                "UPDATE admissions SET grade = ? WHERE name = ? AND class_type = ?",
+                (grade, name, class_type)
             )
             db.commit()
         # 记录查询日志
@@ -363,7 +382,7 @@ def query():
             "category": category,
             "class_type": class_type,
             "grade": grade,
-            "score": score
+            "score": ""
         })
     else:
         # 记录未录取查询

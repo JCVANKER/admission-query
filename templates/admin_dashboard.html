@@ -84,12 +84,14 @@
 
             <!-- 文件模式 -->
             <div class="tab-panel" id="upload-panel-file" style="display:none;">
-                <p class="tab-hint">支持上传 .txt 或 .csv 文件，每行一个姓名</p>
+                <p class="tab-hint">支持上传 .txt / .csv / .xlsx 文件</p>
                 <div class="file-drop-zone" id="dropZone">
                     <p>📂 点击选择文件或拖拽到此处</p>
-                    <input type="file" id="fileInput" accept=".txt,.csv" style="display:none;">
+                    <input type="file" id="fileInput" accept=".txt,.csv,.xlsx" style="display:none;">
                 </div>
             </div>
+
+            <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 
             <div class="upload-actions">
                 <button class="btn-primary" onclick="doUpload()">📤 上传名单</button>

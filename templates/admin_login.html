@@ -15,7 +15,7 @@
         </header>
 
         <div class="query-card">
-            <form class="query-form" id="loginForm" onsubmit="return doLogin()">
+            <div class="query-form" id="loginForm">
                 <div class="input-group">
                     <label for="usernameInput">
                         <span class="label-icon">👤</span> 管理员账号
@@ -26,7 +26,6 @@
                         placeholder="请输入管理员账号"
                         autocomplete="off"
                         autofocus
-                        required
                     >
                 </div>
                 <div class="input-group">
@@ -38,14 +37,13 @@
                         id="passwordInput"
                         placeholder="请输入密码"
                         autocomplete="off"
-                        required
                     >
                 </div>
-                <button class="btn-query" type="submit">
+                <button class="btn-query" type="button" onclick="doLogin()">
                     <span>🔓</span> 登 录
                 </button>
                 <p class="form-hint" id="loginMsg" style="display:none;"></p>
-            </form>
+            </div>
         </div>
 
         <footer class="footer">
@@ -55,27 +53,54 @@
 
     <script>
         async function doLogin() {
+            const btn = document.querySelector('.btn-query');
             const msg = document.getElementById('loginMsg');
             msg.style.display = 'none';
 
-            const resp = await fetch('/admin/login', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    username: document.getElementById('usernameInput').value,
-                    password: document.getElementById('passwordInput').value
-                })
-            });
-            const data = await resp.json();
-            if (data.success) {
-                window.location.href = '/admin/dashboard';
-            } else {
+            const username = document.getElementById('usernameInput').value.trim();
+            const password = document.getElementById('passwordInput').value.trim();
+
+            if (!username || !password) {
                 msg.style.display = 'block';
                 msg.style.color = '#e74c3c';
-                msg.textContent = data.message || '登录失败';
+                msg.textContent = '请输入账号和密码';
+                return;
             }
-            return false;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> 登录中...';
+
+            try {
+                const resp = await fetch('/admin/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    window.location.href = '/admin/dashboard';
+                } else {
+                    msg.style.display = 'block';
+                    msg.style.color = '#e74c3c';
+                    msg.textContent = data.message || '登录失败';
+                }
+            } catch (err) {
+                msg.style.display = 'block';
+                msg.style.color = '#e74c3c';
+                msg.textContent = '网络错误，请重试';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>🔓</span> 登 录';
+            }
         }
+
+        // 回车键触发登录
+        document.getElementById('passwordInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') doLogin();
+        });
+        document.getElementById('usernameInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') doLogin();
+        });
     </script>
 </body>
 </html>

@@ -39,11 +39,7 @@
                 </div>
                 <div class="archive-item">
                     <span class="archive-label">综合成绩</span>
-                    <span class="archive-value grade" id="archiveGrade">A+</span>
-                </div>
-                <div class="archive-item">
-                    <span class="archive-label">综合得分</span>
-                    <span class="archive-value" id="archiveScore">93.3</span>
+                    <span class="archive-value grade" id="archiveGrade">前5%</span>
                 </div>
                 <div class="archive-item">
                     <span class="archive-label">录取结果</span>
@@ -55,7 +51,7 @@
                 </div>
                 <div class="archive-item block">
                     <span class="archive-label">学习目标</span>
-                    <span class="archive-desc">半年冲刺三项学习成果，提供专供教育部白名单赛事与国家级考级资源支持，在锻炼思维能力、提升学习成绩的同时，帮助孩子迅速获得科技特长认证。</span>
+                    <span class="archive-desc" id="archiveGoal">半年冲刺三项学习成果，提供专供教育部白名单赛事与国家级考级资源支持，在锻炼思维能力、提升学习成绩的同时，帮助孩子迅速获得科技特长认证。</span>
                 </div>
                 <div class="archive-item block">
                     <span class="archive-label">英才计划简介</span>
@@ -107,15 +103,21 @@
         const params = new URLSearchParams(window.location.search);
         const name = params.get('name') || '';
         const category = params.get('category') || '{{ category }}';
-        const grade = params.get('grade') || 'A+';
-        const score = params.get('score') || '93.3';
+        const grade = params.get('grade') || '前5%';
         const classType = '{{ class_type }}';
 
         document.getElementById('resultName').textContent = name;
         document.getElementById('archiveName').textContent = name;
         if (category) document.getElementById('archiveCategory').textContent = category;
         if (grade) document.getElementById('archiveGrade').textContent = grade;
-        if (score) document.getElementById('archiveScore').textContent = score;
+
+        // 按班型设置学习目标文案
+        const goalEl = document.getElementById('archiveGoal');
+        if (classType === 'yucai') {
+            goalEl.textContent = '半年冲刺三项学习成果，提供顶级名校教育体系研发的思维能力、专注力开发体系和国家级赛考规划。在训练能力、提升学习成绩的同时，帮助孩子迅速夯实科技特长认证的基础。';
+        } else {
+            goalEl.textContent = '半年冲刺三项学习成果，提供专供教育部白名单赛事与国家级考级资源支持，在锻炼思维能力、提升学习成绩的同时，帮助孩子迅速获得科技特长认证。';
+        }
 
         // 动态显示当前日期
         const now = new Date();
@@ -147,6 +149,11 @@
             const scheduleDate = dateBtn.textContent;
             const scheduleTime = timeBtn.textContent;
 
+            if (!name || name.trim() === '') {
+                alert('页面信息不完整，请返回查询页重新查询');
+                return;
+            }
+
             btn.textContent = '提交中...';
             btn.disabled = true;
 
@@ -154,26 +161,25 @@
                 const resp = await fetch('/api/schedule/confirm', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, date: scheduleDate, time: scheduleTime })
+                    body: JSON.stringify({ name: name.trim(), date: scheduleDate, time: scheduleTime })
                 });
                 const data = await resp.json();
                 if (data.success) {
-                    btn.textContent = '✅ 已确认';
-                    btn.style.background = '#059669';
-                    btn.style.cursor = 'default';
-                    btn.style.opacity = '1';
-                    // 禁用所有选项按钮
-                    document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
-                    alert(`已确认上课安排：${scheduleDate} ${scheduleTime}\n老师将尽快与您联系！`);
+                    // 跳转到入学邀请函页面
+                    const inviteParams = new URLSearchParams();
+                    inviteParams.set('name', name.trim());
+                    inviteParams.set('date', scheduleDate);
+                    inviteParams.set('time', scheduleTime);
+                    window.location.href = '/' + classType + '/invite?' + inviteParams.toString();
                 } else {
                     btn.textContent = '确认选择';
                     btn.disabled = false;
-                    alert('提交失败，请重试');
+                    alert(data.message || '提交失败，请重试');
                 }
             } catch (err) {
                 btn.textContent = '确认选择';
                 btn.disabled = false;
-                alert('网络错误，请重试');
+                alert('网络错误，请检查网络连接后重试');
             }
         }
     </script>

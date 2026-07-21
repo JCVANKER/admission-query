@@ -50,7 +50,32 @@ async function doUpload() {
             msgEl.className = 'upload-msg err';
             return;
         }
-        rawText = await fileInput.files[0].text();
+        const file = fileInput.files[0];
+        const fileName = file.name.toLowerCase();
+        // xlsx 文件用 SheetJS 解析
+        if (fileName.endsWith('.xlsx')) {
+            try {
+                const buffer = await file.arrayBuffer();
+                const workbook = XLSX.read(buffer, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                // 提取所有行的第一列（姓名列），跳过空行
+                const nameList = [];
+                for (const row of rows) {
+                    if (row && row.length > 0 && row[0]) {
+                        const cellVal = String(row[0]).trim();
+                        if (cellVal) nameList.push(cellVal);
+                    }
+                }
+                rawText = nameList.join('\n');
+            } catch (err) {
+                msgEl.textContent = 'xlsx 文件解析失败，请检查格式';
+                msgEl.className = 'upload-msg err';
+                return;
+            }
+        } else {
+            rawText = await file.text();
+        }
     } else {
         rawText = document.getElementById('textInput').value.trim();
     }

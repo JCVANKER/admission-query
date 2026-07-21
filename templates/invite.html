@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>入学邀请函 - 英才计划</title>
+    <link rel="stylesheet" href="/static/css/invite-theme.css?v={{ app_version }}">
+</head>
+<body>
+    <div class="invite-page">
+        <!-- 顶部红色区域 -->
+        <div class="invite-header">
+            <img src="/static/img/logo.png?v={{ app_version }}" alt="北大-点猫科技" class="invite-logo">
+            <h2 class="invite-sub-title">英才计划</h2>
+            <h1 class="invite-main-title">入学邀请函</h1>
+        </div>
+
+        <!-- 米色内容区 -->
+        <div class="invite-body">
+            <p class="invite-student"><strong>{{ student_name }}</strong> 同学</p>
+            <p class="invite-text">经教学中心审核，恭喜你在北大-点猫人工智能教育联合实验室人才选拔中获得：</p>
+            <div class="invite-badge">{{ badge_text }}</div>
+            <p class="invite-welcome">期待你的加入，一起开启编程之旅！</p>
+            <p class="invite-hint">（请于升学通道开启后24小时内确认入学信息）</p>
+
+            <!-- 印章 -->
+            <div class="invite-stamp">
+                <div class="stamp-circle">
+                    <span class="stamp-text">英才计划</span>
+                    <span class="stamp-sub">教学中心</span>
+                </div>
+            </div>
+
+            <!-- 底部信息 -->
+            <div class="invite-bottom">
+                <span class="invite-date">{{ today_date }}</span>
+                <span class="invite-company">深圳点猫科技有限公司</span>
+            </div>
+        </div>
+
+        <!-- 确定按钮 -->
+        <button class="invite-btn" onclick="window.location.href='/'">确定</button>
+    </div>
+</body>
+</html>
