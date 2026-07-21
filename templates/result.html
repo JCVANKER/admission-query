@@ -60,32 +60,21 @@
             </div>
         </div>
 
-        <!-- 上课安排 -->
+        <!-- 培养需求选择 -->
         <div class="schedule-section">
-            <h3 class="schedule-title">选择上课安排</h3>
-            <p class="schedule-hint">请选择日期和时段，确认后老师会优先核对。</p>
+            <h3 class="schedule-title">选择培养需求（可多选）</h3>
+            <p class="schedule-hint">请选择您希望孩子获得的培养方向，确认后老师会优先核对。</p>
 
-            <div class="schedule-group">
-                <p class="schedule-label">日期</p>
-                <div class="schedule-options" id="dateOptions">
-                    <button class="option-btn active" data-value="周一">周一</button>
-                    <button class="option-btn" data-value="周四">周四</button>
-                    <button class="option-btn" data-value="周五">周五</button>
-                    <button class="option-btn" data-value="周六">周六</button>
-                    <button class="option-btn" data-value="周日">周日</button>
-                </div>
-            </div>
-
-            <div class="schedule-group">
-                <p class="schedule-label">时段</p>
-                <div class="schedule-options" id="timeOptions">
-                    <button class="option-btn active" data-value="14:00-15:00">14:00-15:00</button>
-                    <button class="option-btn" data-value="15:00-16:00">15:00-16:00</button>
-                    <button class="option-btn" data-value="17:00-18:00">17:00-18:00</button>
-                    <button class="option-btn" data-value="18:00-19:00">18:00-19:00</button>
-                    <button class="option-btn" data-value="19:00-20:00">19:00-20:00</button>
-                    <button class="option-btn" data-value="20:00-21:00">20:00-21:00</button>
-                </div>
+            <div class="schedule-options needs-options" id="needsOptions">
+                <button class="option-btn" data-value="锻炼强大逻辑思维">锻炼强大逻辑思维</button>
+                <button class="option-btn" data-value="培养良好学习习惯">培养良好学习习惯</button>
+                <button class="option-btn" data-value="提升专注力">提升专注力</button>
+                <button class="option-btn" data-value="锻炼学习能力">锻炼学习能力</button>
+                <button class="option-btn" data-value="认证科技特长生">认证科技特长生</button>
+                <button class="option-btn" data-value="兴趣培养">兴趣培养</button>
+                <button class="option-btn" data-value="锻炼自驱力">锻炼自驱力</button>
+                <button class="option-btn" data-value="培养感恩孝顺素质">培养感恩孝顺素质</button>
+                <button class="option-btn" data-value="其他（与老师确认）">其他（与老师确认）</button>
             </div>
 
             <button class="btn-confirm" id="confirmBtn" onclick="doConfirm()">确认选择</button>
@@ -126,28 +115,28 @@
         const day = now.getDate();
         document.getElementById('resultDate').textContent = `${year}年${month}月${day}日`;
 
-        // 日期和时段选择
-        document.querySelectorAll('.schedule-options').forEach(group => {
-            group.addEventListener('click', (e) => {
-                if (e.target.classList.contains('option-btn')) {
-                    group.querySelectorAll('.option-btn').forEach(b => b.classList.remove('active'));
+        // 培养需求多选
+        const selectedNeeds = new Set();
+        document.getElementById('needsOptions').addEventListener('click', (e) => {
+            if (e.target.classList.contains('option-btn')) {
+                const value = e.target.dataset.value;
+                if (selectedNeeds.has(value)) {
+                    selectedNeeds.delete(value);
+                    e.target.classList.remove('active');
+                } else {
+                    selectedNeeds.add(value);
                     e.target.classList.add('active');
                 }
-            });
+            }
         });
 
         async function doConfirm() {
-            const dateBtn = document.querySelector('#dateOptions .option-btn.active');
-            const timeBtn = document.querySelector('#timeOptions .option-btn.active');
             const btn = document.getElementById('confirmBtn');
 
-            if (!dateBtn || !timeBtn) {
-                alert('请选择日期和时段');
+            if (selectedNeeds.size === 0) {
+                alert('请至少选择一项培养需求');
                 return;
             }
-
-            const scheduleDate = dateBtn.textContent;
-            const scheduleTime = timeBtn.textContent;
 
             if (!name || name.trim() === '') {
                 alert('页面信息不完整，请返回查询页重新查询');
@@ -161,15 +150,14 @@
                 const resp = await fetch('/api/schedule/confirm', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: name.trim(), date: scheduleDate, time: scheduleTime })
+                    body: JSON.stringify({ name: name.trim(), needs: Array.from(selectedNeeds) })
                 });
                 const data = await resp.json();
                 if (data.success) {
                     // 跳转到入学邀请函页面
                     const inviteParams = new URLSearchParams();
                     inviteParams.set('name', name.trim());
-                    inviteParams.set('date', scheduleDate);
-                    inviteParams.set('time', scheduleTime);
+                    inviteParams.set('needs', Array.from(selectedNeeds).join(','));
                     window.location.href = '/' + classType + '/invite?' + inviteParams.toString();
                 } else {
                     btn.textContent = '确认选择';

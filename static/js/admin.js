@@ -282,7 +282,7 @@ let logSearchTimer = null;
 async function loadLogs(page) {
     logCurrentPage = page;
     const tbody = document.getElementById('logTableBody');
-    const colspan = 7;
+    const colspan = 6;
     tbody.innerHTML = `<tr><td colspan="${colspan}" class="loading-cell">加载中...</td></tr>`;
 
     try {
@@ -304,9 +304,9 @@ async function loadLogs(page) {
         tbody.innerHTML = data.items.map(item => {
             // 行颜色：已录取绿色背景，未录取红色背景
             const rowClass = item.admitted ? 'log-row-admitted' : 'log-row-rejected';
-            const hasConfirmed = item.schedule_date && item.schedule_time;
+            const hasNeeds = item.needs && item.needs.trim() !== '';
             const statusHtml = item.admitted
-                ? `<span class="log-status admitted">✅ 已录取${hasConfirmed ? ' (已确认)' : ''}</span>`
+                ? `<span class="log-status admitted">✅ 已录取${hasNeeds ? ' (已提交需求)' : ''}</span>`
                 : `<span class="log-status rejected">❌ 未录取</span>`;
 
             return `
@@ -315,8 +315,7 @@ async function loadLogs(page) {
                     <td><strong>${escapeHtml(item.name)}</strong></td>
                     <td>${item.class_type === 'yucai' ? '育才班' : item.class_type === 'kete' ? '科特班' : '-'}</td>
                     <td>${statusHtml}</td>
-                    <td>${hasConfirmed ? `<span class="confirmed-badge">📅 ${item.schedule_date}</span>` : '-'}</td>
-                    <td>${item.schedule_time ? `<span class="confirmed-badge">🕐 ${item.schedule_time}</span>` : '-'}</td>
+                    <td>${hasNeeds ? item.needs.split(',').map(n => `<span class="confirmed-badge">${n}</span>`).join(' ') : '-'}</td>
                     <td>${item.created_at || '-'}</td>
                 </tr>
             `;

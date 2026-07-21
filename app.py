@@ -120,6 +120,9 @@ def init_db():
             "DROP TRIGGER IF EXISTS trg_captcha_store_localtime",
             "CREATE TRIGGER trg_captcha_store_localtime AFTER INSERT ON captcha_store BEGIN UPDATE captcha_store SET created_at = datetime(NEW.created_at, '+8 hours') WHERE id = NEW.id; END",
         ],
+        4: [
+            "ALTER TABLE query_logs ADD COLUMN needs TEXT DEFAULT ''",
+        ],
     }
 
     # 按序执行未应用的迁移
@@ -426,9 +429,9 @@ def admin_stats():
     # 总查询数
     total_queries = db.execute("SELECT COUNT(*) as cnt FROM query_logs").fetchone()["cnt"]
 
-    # 已确认上课安排数
+    # 已提交需求数
     confirmed = db.execute(
-        "SELECT COUNT(*) as cnt FROM query_logs WHERE schedule_date != '' AND schedule_time != ''"
+        "SELECT COUNT(*) as cnt FROM query_logs WHERE needs != ''"
     ).fetchone()["cnt"]
 
     # 录取率（被录取的查询 / 总查询）
@@ -600,20 +603,20 @@ def admin_clear():
 
 @app.route("/api/schedule/confirm", methods=["POST"])
 def schedule_confirm():
-    """用户确认上课安排"""
+    """用户提交培养需求"""
     data = request.get_json()
     name = data.get("name", "").strip()
-    date = data.get("date", "").strip()
-    time_slot = data.get("time", "").strip()
+    needs = data.get("needs", [])
 
     if not name:
         return jsonify({"success": False, "message": "缺少姓名"})
 
+    needs_str = ",".join(needs) if isinstance(needs, list) else ""
+
     db = get_db()
-    # 更新最近一条该姓名的录取查询日志
     db.execute(
-        "UPDATE query_logs SET schedule_date = ?, schedule_time = ? WHERE name = ? AND admitted = 1 AND id = (SELECT MAX(id) FROM query_logs WHERE name = ? AND admitted = 1)",
-        (date, time_slot, name, name)
+        "UPDATE query_logs SET needs = ? WHERE name = ? AND admitted = 1 AND id = (SELECT MAX(id) FROM query_logs WHERE name = ? AND admitted = 1)",
+        (needs_str, name, name)
     )
     db.commit()
     return jsonify({"success": True})
@@ -645,13 +648,13 @@ def admin_logs():
             f"SELECT COUNT(*) as cnt FROM query_logs WHERE {where}", params
         ).fetchone()["cnt"]
         rows = db.execute(
-            f"SELECT id, name, admitted, class_type, schedule_date, schedule_time, created_at FROM query_logs WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?",
+            f"SELECT id, name, admitted, class_type, needs, created_at FROM query_logs WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?",
             params + [per_page, (page - 1) * per_page]
         ).fetchall()
     else:
         count = db.execute("SELECT COUNT(*) as cnt FROM query_logs").fetchone()["cnt"]
         rows = db.execute(
-            "SELECT id, name, admitted, class_type, schedule_date, schedule_time, created_at FROM query_logs ORDER BY id DESC LIMIT ? OFFSET ?",
+            "SELECT id, name, admitted, class_type, needs, created_at FROM query_logs ORDER BY id DESC LIMIT ? OFFSET ?",
             (per_page, (page - 1) * per_page)
         ).fetchall()
 
@@ -669,19 +672,18 @@ def admin_logs_export():
     """导出查询日志为 CSV"""
     db = get_db()
     rows = db.execute(
-        "SELECT name, admitted, class_type, schedule_date, schedule_time, created_at FROM query_logs ORDER BY id DESC"
+        "SELECT name, admitted, class_type, needs, created_at FROM query_logs ORDER BY id DESC"
     ).fetchall()
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["姓名", "班型", "录取状态", "上课日期", "上课时段", "查询时间"])
+    writer.writerow(["姓名", "班型", "录取状态", "培养需求", "查询时间"])
     for r in rows:
         writer.writerow([
             r["name"],
             CLASS_TYPES.get(r["class_type"], {}).get("name", r["class_type"] or "-"),
             "已录取" if r["admitted"] else "未录取",
-            r["schedule_date"] or "-",
-            r["schedule_time"] or "-",
+            r["needs"] or "-",
             r["created_at"]
         ])
 

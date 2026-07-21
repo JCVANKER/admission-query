@@ -86,8 +86,8 @@ def test_existing_features():
         assert data["success"] is True
         assert data["admitted"] is False
 
-        # ── 6. 确认上课安排 ──
-        resp = c.post("/api/schedule/confirm", json={"name": "张三", "date": "周六", "time": "14:00-15:00"})
+        # ── 6. 提交培养需求 ──
+        resp = c.post("/api/schedule/confirm", json={"name": "张三", "needs": ["锻炼强大逻辑思维", "提升专注力"]})
         assert resp.get_json()["success"] is True
 
         # ── 7. 查询日志 ──

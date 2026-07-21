@@ -23,6 +23,12 @@
             <p class="invite-welcome">关注编程猫官方直播间，领取英才计划学员优惠</p>
             <p class="invite-hint">（请于官方入学通道开启后24小时内与老师确认入学信息）</p>
 
+            <!-- 培养需求 -->
+            <div class="invite-needs" id="needsSection" style="display:none;">
+                <p class="needs-label">已选培养需求</p>
+                <div class="needs-tags" id="needsTags"></div>
+            </div>
+
             <!-- 底部信息 + 印章 -->
             <div class="invite-bottom">
                 <span class="invite-date" id="liveDate">{{ today_date }}</span>
@@ -47,6 +53,17 @@
         const month = String(now.getMonth() + 1).padStart(2, '0');
         const day = String(now.getDate()).padStart(2, '0');
         document.getElementById('liveDate').textContent = `${year}年${month}月${day}日`;
+
+        // 显示培养需求
+        const urlParams = new URLSearchParams(window.location.search);
+        const needs = urlParams.get('needs');
+        if (needs) {
+            const needsSection = document.getElementById('needsSection');
+            const needsTags = document.getElementById('needsTags');
+            const needsList = needs.split(',');
+            needsTags.innerHTML = needsList.map(n => `<span class="need-tag">${n}</span>`).join('');
+            needsSection.style.display = 'block';
+        }
     </script>
 </body>
 </html>

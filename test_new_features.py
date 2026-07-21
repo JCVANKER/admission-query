@@ -271,7 +271,7 @@ def test_stats_with_queries(admin_client, client):
 # ═══════════════════════════════════════════
 
 def test_logs_show_confirmed_status(admin_client, client):
-    """测试日志中确认状态字段正确返回"""
+    """测试日志中需求提交状态字段正确返回"""
     admin_client.post("/api/admin/upload", json={"names": [{"name": "确认测试"}], "class_type": "kete"})
 
     # 获取验证码
@@ -286,8 +286,8 @@ def test_logs_show_confirmed_status(admin_client, client):
 
     client.get(f"/api/query?name=确认测试&class_type=kete&captcha_token={captcha_data['token']}&captcha_answer={answer}")
 
-    # 确认上课安排
-    client.post("/api/schedule/confirm", json={"name": "确认测试", "date": "周六", "time": "14:00-15:00"})
+    # 提交培养需求
+    client.post("/api/schedule/confirm", json={"name": "确认测试", "needs": ["锻炼强大逻辑思维", "提升专注力"]})
 
     # 检查日志
     resp = admin_client.get("/api/admin/logs")
@@ -295,8 +295,8 @@ def test_logs_show_confirmed_status(admin_client, client):
     admitted_logs = [l for l in logs if l["name"] == "确认测试" and l["admitted"] == 1]
     assert len(admitted_logs) >= 1
     log = admitted_logs[0]
-    assert log["schedule_date"] == "周六"
-    assert log["schedule_time"] == "14:00-15:00"
+    assert "锻炼强大逻辑思维" in log["needs"]
+    assert "提升专注力" in log["needs"]
 
 
 def test_schedule_confirm_returns_success(client, admin_client):

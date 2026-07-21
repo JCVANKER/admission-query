@@ -116,7 +116,38 @@ body {
 .invite-hint {
     font-size: 0.75rem;
     color: #999;
-    margin-bottom: 24px;
+    margin-bottom: 16px;
+}
+
+/* ── 培养需求标签 ── */
+.invite-needs {
+    margin-bottom: 20px;
+    padding: 0 4px;
+}
+
+.needs-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #8b6914;
+    margin-bottom: 8px;
+}
+
+.needs-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+}
+
+.need-tag {
+    display: inline-block;
+    padding: 4px 12px;
+    font-size: 0.78rem;
+    color: #c53a2a;
+    background: #fff;
+    border: 1px solid #d4a84b;
+    border-radius: 12px;
+    font-weight: 500;
 }
 
 /* ── 底部信息 + 印章 ── */
