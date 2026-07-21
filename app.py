@@ -47,7 +47,7 @@ def init_db():
     db = sqlite3.connect(app.config["DATABASE"])
     db.execute("PRAGMA journal_mode=WAL")
 
-    # 创建基础表
+    # 创建基础表（使用 datetime('now', 'localtime') 确保北京时间）
     db.executescript("""
         CREATE TABLE IF NOT EXISTS admissions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +56,7 @@ def init_db():
             class_type TEXT DEFAULT 'kete',
             grade TEXT DEFAULT '',
             score TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
         );
         CREATE INDEX IF NOT EXISTS idx_admissions_name ON admissions(name);
 
@@ -67,7 +67,7 @@ def init_db():
             class_type TEXT DEFAULT '',
             schedule_date TEXT DEFAULT '',
             schedule_time TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
         );
         CREATE INDEX IF NOT EXISTS idx_query_logs_name ON query_logs(name);
 
@@ -77,7 +77,7 @@ def init_db():
             target TEXT DEFAULT '',
             detail TEXT DEFAULT '',
             admin_user TEXT DEFAULT 'admin',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
         );
 
         CREATE TABLE IF NOT EXISTS captcha_store (
@@ -85,12 +85,12 @@ def init_db():
             token TEXT NOT NULL UNIQUE,
             answer INTEGER NOT NULL,
             used INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
         );
 
         CREATE TABLE IF NOT EXISTS schema_version (
             version INTEGER PRIMARY KEY,
-            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            applied_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
         );
     """)
 
@@ -106,8 +106,19 @@ def init_db():
             "ALTER TABLE query_logs ADD COLUMN class_type TEXT DEFAULT ''",
         ],
         2: [
-            "CREATE TABLE IF NOT EXISTS admin_audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT NOT NULL, target TEXT DEFAULT '', detail TEXT DEFAULT '', admin_user TEXT DEFAULT 'admin', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
-            "CREATE TABLE IF NOT EXISTS captcha_store (id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT NOT NULL UNIQUE, answer INTEGER NOT NULL, used INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+            "CREATE TABLE IF NOT EXISTS admin_audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT NOT NULL, target TEXT DEFAULT '', detail TEXT DEFAULT '', admin_user TEXT DEFAULT 'admin', created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')))",
+            "CREATE TABLE IF NOT EXISTS captcha_store (id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT NOT NULL UNIQUE, answer INTEGER NOT NULL, used INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')))",
+        ],
+        3: [
+            # 为现有表添加触发器，在插入时将 UTC 时间转换为北京时间
+            "DROP TRIGGER IF EXISTS trg_admissions_localtime",
+            "CREATE TRIGGER trg_admissions_localtime AFTER INSERT ON admissions BEGIN UPDATE admissions SET created_at = datetime(NEW.created_at, '+8 hours') WHERE id = NEW.id; END",
+            "DROP TRIGGER IF EXISTS trg_query_logs_localtime",
+            "CREATE TRIGGER trg_query_logs_localtime AFTER INSERT ON query_logs BEGIN UPDATE query_logs SET created_at = datetime(NEW.created_at, '+8 hours') WHERE id = NEW.id; END",
+            "DROP TRIGGER IF EXISTS trg_audit_log_localtime",
+            "CREATE TRIGGER trg_audit_log_localtime AFTER INSERT ON admin_audit_log BEGIN UPDATE admin_audit_log SET created_at = datetime(NEW.created_at, '+8 hours') WHERE id = NEW.id; END",
+            "DROP TRIGGER IF EXISTS trg_captcha_store_localtime",
+            "CREATE TRIGGER trg_captcha_store_localtime AFTER INSERT ON captcha_store BEGIN UPDATE captcha_store SET created_at = datetime(NEW.created_at, '+8 hours') WHERE id = NEW.id; END",
         ],
     }
 
@@ -405,10 +416,10 @@ def admin_stats():
     kete = db.execute("SELECT COUNT(*) as cnt FROM admissions WHERE class_type = 'kete'").fetchone()["cnt"]
     yucai = db.execute("SELECT COUNT(*) as cnt FROM admissions WHERE class_type = 'yucai'").fetchone()["cnt"]
 
-    # 今日查询数
+    # 今日查询数（使用 datetime('now', 'localtime') 确保北京时间）
     today = datetime.now().strftime("%Y-%m-%d")
     today_queries = db.execute(
-        "SELECT COUNT(*) as cnt FROM query_logs WHERE date(created_at) = ?",
+        "SELECT COUNT(*) as cnt FROM query_logs WHERE date(created_at, 'localtime') = ?",
         (today,)
     ).fetchone()["cnt"]
 
@@ -429,7 +440,7 @@ def admin_stats():
 
     # 今日新增录取名单
     today_new = db.execute(
-        "SELECT COUNT(*) as cnt FROM admissions WHERE date(created_at) = ?",
+        "SELECT COUNT(*) as cnt FROM admissions WHERE date(created_at, 'localtime') = ?",
         (today,)
     ).fetchone()["cnt"]
 

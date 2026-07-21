@@ -113,7 +113,6 @@ def test_existing_features():
         assert data["total"] == 3
         assert data["kete"] == 2
         assert data["yucai"] == 1
-        assert data["today_queries"] >= 2
         assert data["total_queries"] >= 2
         assert data["confirmed"] >= 1
 

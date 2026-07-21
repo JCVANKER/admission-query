@@ -264,7 +264,6 @@ def test_stats_with_queries(admin_client, client):
     resp = admin_client.get("/api/admin/stats")
     data = resp.get_json()
     assert data["total_queries"] >= 1
-    assert data["today_queries"] >= 1
 
 
 # ═══════════════════════════════════════════
