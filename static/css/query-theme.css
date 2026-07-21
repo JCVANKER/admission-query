@@ -164,6 +164,65 @@ body {
     transform: none;
 }
 
+/* ── 验证码 ── */
+.captcha-group {
+    margin-bottom: 16px;
+}
+
+.captcha-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.captcha-expr {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 120px;
+    height: 48px;
+    padding: 0 16px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #fff;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 10px;
+    letter-spacing: 0.04em;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.captcha-input {
+    flex: 1;
+    min-width: 0;
+}
+
+.captcha-refresh {
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 10px;
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.captcha-refresh:hover {
+    background: rgba(255,255,255,0.18);
+}
+
+.captcha-refresh:active {
+    background: rgba(255,255,255,0.25);
+}
+
 /* ── 结果区域 ── */
 .result-area {
     margin-top: 24px;

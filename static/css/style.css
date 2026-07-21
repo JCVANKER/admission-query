@@ -327,6 +327,65 @@ body.admin-page .container {
 
 .btn-logout { color: var(--danger); }
 
+/* ── 统计概览卡片 ── */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+@media (max-width: 640px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 400px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.stat-card {
+    background: var(--card-bg);
+    border-radius: var(--radius-sm);
+    padding: 18px 16px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    text-align: center;
+    transition: var(--transition);
+}
+
+.stat-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+}
+
+.stat-card-icon {
+    font-size: 1.5rem;
+    margin-bottom: 6px;
+}
+
+.stat-card-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.2;
+}
+
+.stat-card-label {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.stat-card.accent-green .stat-card-value { color: #059669; }
+.stat-card.accent-purple .stat-card-value { color: #7c3aed; }
+.stat-card.accent-orange .stat-card-value { color: #ea580c; }
+.stat-card.accent-blue .stat-card-value { color: #2563eb; }
+.stat-card.accent-teal .stat-card-value { color: #0d9488; }
+
 /* ── 管理区域 ── */
 .admin-section {
     background: var(--card-bg);
@@ -632,6 +691,47 @@ body.admin-page .container {
 :focus-visible {
     outline: 2px solid var(--primary);
     outline-offset: 2px;
+}
+
+/* ── 查询日志颜色标记 ── */
+.log-row-admitted {
+    background: #f0fdf4 !important;
+}
+
+.log-row-admitted:hover {
+    background: #dcfce7 !important;
+}
+
+.log-row-rejected {
+    background: #fef2f2 !important;
+}
+
+.log-row-rejected:hover {
+    background: #fee2e2 !important;
+}
+
+.log-status {
+    font-weight: 600;
+    font-size: 0.82rem;
+}
+
+.log-status.admitted {
+    color: #059669;
+}
+
+.log-status.rejected {
+    color: #dc2626;
+}
+
+.confirmed-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #059669;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
 }
 
 /* ── 打印样式 ── */

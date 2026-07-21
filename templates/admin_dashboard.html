@@ -20,6 +20,40 @@
             </div>
         </nav>
 
+        <!-- 统计概览卡片 -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="stat-card-icon">👥</div>
+                <div class="stat-card-value" id="statTotal">--</div>
+                <div class="stat-card-label">录取总人数</div>
+            </div>
+            <div class="stat-card accent-green">
+                <div class="stat-card-icon">📊</div>
+                <div class="stat-card-value" id="statTodayQueries">--</div>
+                <div class="stat-card-label">今日查询次数</div>
+            </div>
+            <div class="stat-card accent-purple">
+                <div class="stat-card-icon">📈</div>
+                <div class="stat-card-value" id="statTotalQueries">--</div>
+                <div class="stat-card-label">累计查询次数</div>
+            </div>
+            <div class="stat-card accent-orange">
+                <div class="stat-card-icon">✅</div>
+                <div class="stat-card-value" id="statConfirmed">--</div>
+                <div class="stat-card-label">已确认上课</div>
+            </div>
+            <div class="stat-card accent-blue">
+                <div class="stat-card-icon">📉</div>
+                <div class="stat-card-value" id="statRate">--</div>
+                <div class="stat-card-label">录取率</div>
+            </div>
+            <div class="stat-card accent-teal">
+                <div class="stat-card-icon">🆕</div>
+                <div class="stat-card-value" id="statTodayNew">--</div>
+                <div class="stat-card-label">今日新增名单</div>
+            </div>
+        </div>
+
         <!-- 上传区域 -->
         <div class="admin-section">
             <h3>📤 上传录取名单</h3>
@@ -136,6 +170,32 @@
                 </table>
             </div>
             <div class="pagination" id="logPagination"></div>
+        </div>
+
+        <!-- 操作日志 -->
+        <div class="admin-section">
+            <h3>📝 操作日志</h3>
+            <div class="list-toolbar">
+                <div class="toolbar-actions" style="margin-left:auto;">
+                    <button class="btn-danger-outline" onclick="doClearAllAuditLogs()">🗑 清空全部</button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table" id="auditLogTable">
+                    <thead>
+                        <tr>
+                            <th>操作</th>
+                            <th>对象</th>
+                            <th>详情</th>
+                            <th>操作时间</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditLogTableBody">
+                        <tr><td colspan="4" class="loading-cell">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination" id="auditLogPagination"></div>
         </div>
 
         <footer class="footer">

@@ -4,6 +4,7 @@ import os
 import csv
 import io
 import time
+import json
 from datetime import datetime
 
 from flask import Flask, g, render_template, request, jsonify, redirect, url_for, flash, session, make_response
@@ -70,6 +71,23 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_query_logs_name ON query_logs(name);
 
+        CREATE TABLE IF NOT EXISTS admin_audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action TEXT NOT NULL,
+            target TEXT DEFAULT '',
+            detail TEXT DEFAULT '',
+            admin_user TEXT DEFAULT 'admin',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS captcha_store (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            token TEXT NOT NULL UNIQUE,
+            answer INTEGER NOT NULL,
+            used INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS schema_version (
             version INTEGER PRIMARY KEY,
             applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -86,6 +104,10 @@ def init_db():
         1: [
             "ALTER TABLE admissions ADD COLUMN class_type TEXT DEFAULT 'kete'",
             "ALTER TABLE query_logs ADD COLUMN class_type TEXT DEFAULT ''",
+        ],
+        2: [
+            "CREATE TABLE IF NOT EXISTS admin_audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT NOT NULL, target TEXT DEFAULT '', detail TEXT DEFAULT '', admin_user TEXT DEFAULT 'admin', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+            "CREATE TABLE IF NOT EXISTS captcha_store (id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT NOT NULL UNIQUE, answer INTEGER NOT NULL, used INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
         ],
     }
 
@@ -136,6 +158,41 @@ def generate_grade():
 def generate_score():
     """生成综合得分：91.3 到 97.6 之间，保留一位小数"""
     return round(random.uniform(91.3, 97.6), 1)
+
+
+def generate_captcha():
+    """生成数学验证码，返回 (表达式, 答案)"""
+    ops = [
+        ("+", lambda a, b: a + b),
+        ("-", lambda a, b: a - b),
+        ("×", lambda a, b: a * b),
+    ]
+    op_symbol, op_func = random.choice(ops)
+    if op_symbol == "×":
+        a, b = random.randint(1, 9), random.randint(1, 9)
+    elif op_symbol == "-":
+        a, b = random.randint(5, 20), random.randint(1, 10)
+        if a < b:
+            a, b = b, a
+    else:
+        a, b = random.randint(1, 20), random.randint(1, 10)
+    answer = op_func(a, b)
+    expression = f"{a} {op_symbol} {b} = ?"
+    return expression, answer
+
+
+def log_audit(action, target="", detail=""):
+    """记录管理后台操作日志"""
+    try:
+        db = sqlite3.connect(app.config["DATABASE"])
+        db.execute(
+            "INSERT INTO admin_audit_log (action, target, detail) VALUES (?, ?, ?)",
+            (action, target, detail)
+        )
+        db.commit()
+        db.close()
+    except Exception:
+        pass  # 日志记录失败不阻塞主流程
 
 
 # ──────────────────── 认证 ────────────────────
@@ -225,14 +282,54 @@ def result_page(class_type):
         score=score)
 
 
+@app.route("/api/captcha")
+def get_captcha():
+    """生成数学验证码，返回 token 和表达式"""
+    import uuid
+    expression, answer = generate_captcha()
+    token = uuid.uuid4().hex[:16]
+
+    db = get_db()
+    db.execute(
+        "INSERT INTO captcha_store (token, answer) VALUES (?, ?)",
+        (token, answer)
+    )
+    db.commit()
+    return jsonify({"token": token, "expression": expression})
+
+
 @app.route("/api/query")
 def query():
     """查询是否被录取"""
     name = request.args.get("name", "").strip()
     class_type = request.args.get("class_type", "kete").strip()
+    captcha_token = request.args.get("captcha_token", "").strip()
+    captcha_answer = request.args.get("captcha_answer", "").strip()
 
     if not name:
         return jsonify({"success": False, "message": "请输入姓名"})
+
+    # 验证验证码
+    db = get_db()
+    if captcha_token and captcha_answer:
+        captcha_row = db.execute(
+            "SELECT answer, used FROM captcha_store WHERE token = ?",
+            (captcha_token,)
+        ).fetchone()
+        if not captcha_row:
+            return jsonify({"success": False, "message": "验证码已过期，请刷新后重试"})
+        if captcha_row["used"]:
+            return jsonify({"success": False, "message": "验证码已使用，请刷新后重试"})
+        try:
+            if int(captcha_answer) != captcha_row["answer"]:
+                return jsonify({"success": False, "message": "验证码错误，请重新输入"})
+        except (ValueError, TypeError):
+            return jsonify({"success": False, "message": "验证码格式错误"})
+        # 标记验证码已使用
+        db.execute("UPDATE captcha_store SET used = 1 WHERE token = ?", (captcha_token,))
+        db.commit()
+    else:
+        return jsonify({"success": False, "message": "请输入验证码"})
 
     db = get_db()
     row = db.execute(
@@ -288,7 +385,45 @@ def admin_stats():
     total = db.execute("SELECT COUNT(*) as cnt FROM admissions").fetchone()["cnt"]
     kete = db.execute("SELECT COUNT(*) as cnt FROM admissions WHERE class_type = 'kete'").fetchone()["cnt"]
     yucai = db.execute("SELECT COUNT(*) as cnt FROM admissions WHERE class_type = 'yucai'").fetchone()["cnt"]
-    return jsonify({"total": total, "kete": kete, "yucai": yucai})
+
+    # 今日查询数
+    today = datetime.now().strftime("%Y-%m-%d")
+    today_queries = db.execute(
+        "SELECT COUNT(*) as cnt FROM query_logs WHERE date(created_at) = ?",
+        (today,)
+    ).fetchone()["cnt"]
+
+    # 总查询数
+    total_queries = db.execute("SELECT COUNT(*) as cnt FROM query_logs").fetchone()["cnt"]
+
+    # 已确认上课安排数
+    confirmed = db.execute(
+        "SELECT COUNT(*) as cnt FROM query_logs WHERE schedule_date != '' AND schedule_time != ''"
+    ).fetchone()["cnt"]
+
+    # 录取率（被录取的查询 / 总查询）
+    admitted_count = db.execute(
+        "SELECT COUNT(*) as cnt FROM query_logs WHERE admitted = 1"
+    ).fetchone()["cnt"]
+
+    admission_rate = round(admitted_count / total_queries * 100, 1) if total_queries > 0 else 0
+
+    # 今日新增录取名单
+    today_new = db.execute(
+        "SELECT COUNT(*) as cnt FROM admissions WHERE date(created_at) = ?",
+        (today,)
+    ).fetchone()["cnt"]
+
+    return jsonify({
+        "total": total,
+        "kete": kete,
+        "yucai": yucai,
+        "today_queries": today_queries,
+        "total_queries": total_queries,
+        "confirmed": confirmed,
+        "admission_rate": admission_rate,
+        "today_new": today_new
+    })
 
 
 @app.route("/api/admin/upload", methods=["POST"])
@@ -337,6 +472,8 @@ def admin_upload():
             errors.append(str(e))
 
     db.commit()
+
+    log_audit("上传录取名单", f"{CLASS_TYPES.get(class_type, {}).get('name', class_type)}", f"成功 {inserted} 条，跳过 {skipped} 条")
 
     return jsonify({
         "success": True,
@@ -394,8 +531,12 @@ def admin_list():
 @api_login_required
 def admin_delete(record_id):
     db = get_db()
+    # 先查记录信息用于日志
+    row = db.execute("SELECT name, class_type FROM admissions WHERE id = ?", (record_id,)).fetchone()
     db.execute("DELETE FROM admissions WHERE id = ?", (record_id,))
     db.commit()
+    if row:
+        log_audit("删除录取名单", row["name"], f"班型: {CLASS_TYPES.get(row['class_type'], {}).get('name', row['class_type'])}")
     return jsonify({"success": True})
 
 
@@ -411,6 +552,7 @@ def admin_batch_delete():
     placeholders = ",".join("?" * len(ids))
     db.execute(f"DELETE FROM admissions WHERE id IN ({placeholders})", ids)
     db.commit()
+    log_audit("批量删除录取名单", "", f"删除 {len(ids)} 条记录")
     return jsonify({"success": True, "deleted": len(ids)})
 
 
@@ -420,6 +562,7 @@ def admin_clear():
     db = get_db()
     db.execute("DELETE FROM admissions")
     db.commit()
+    log_audit("清空录取名单", "", "已清空全部录取名单")
     return jsonify({"success": True})
 
 
@@ -531,6 +674,7 @@ def admin_logs_batch_delete():
     placeholders = ",".join("?" * len(ids))
     db.execute(f"DELETE FROM query_logs WHERE id IN ({placeholders})", ids)
     db.commit()
+    log_audit("批量删除查询日志", "", f"删除 {len(ids)} 条日志")
     return jsonify({"success": True, "deleted": len(ids)})
 
 
@@ -540,6 +684,52 @@ def admin_logs_clear():
     """清空全部查询日志"""
     db = get_db()
     db.execute("DELETE FROM query_logs")
+    db.commit()
+    log_audit("清空查询日志", "", "已清空全部查询日志")
+    return jsonify({"success": True})
+
+
+# ──────────────────── 操作日志 ────────────────────
+
+@app.route("/api/admin/audit-logs")
+@api_login_required
+def admin_audit_logs():
+    """分页获取管理后台操作日志"""
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 50, type=int)
+
+    db = get_db()
+    count = db.execute("SELECT COUNT(*) as cnt FROM admin_audit_log").fetchone()["cnt"]
+    rows = db.execute(
+        "SELECT id, action, target, detail, admin_user, created_at FROM admin_audit_log ORDER BY id DESC LIMIT ? OFFSET ?",
+        (per_page, (page - 1) * per_page)
+    ).fetchall()
+
+    return jsonify({
+        "total": count,
+        "page": page,
+        "per_page": per_page,
+        "items": [dict(r) for r in rows]
+    })
+
+
+@app.route("/api/admin/audit-logs/clear", methods=["DELETE"])
+@api_login_required
+def admin_audit_logs_clear():
+    """清空操作日志"""
+    db = get_db()
+    db.execute("DELETE FROM admin_audit_log")
+    db.commit()
+    return jsonify({"success": True})
+
+
+# ──────────────────── 定期清理过期验证码 ────────────────────
+
+@app.route("/api/captcha/cleanup")
+def captcha_cleanup():
+    """清理超过10分钟的未使用验证码（可配置定时任务调用）"""
+    db = get_db()
+    db.execute("DELETE FROM captcha_store WHERE used = 0 AND datetime(created_at, '+10 minutes') < datetime('now', 'localtime')")
     db.commit()
     return jsonify({"success": True})
 

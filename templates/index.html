@@ -34,6 +34,23 @@
                         autofocus
                     >
                 </div>
+                <!-- 验证码 -->
+                <div class="form-group captcha-group">
+                    <label class="form-label">验证码</label>
+                    <div class="captcha-row">
+                        <span class="captcha-expr" id="captchaExpr">加载中...</span>
+                        <input
+                            type="text"
+                            id="captchaInput"
+                            class="form-input captcha-input"
+                            placeholder="请输入结果"
+                            autocomplete="off"
+                            maxlength="3"
+                            inputmode="numeric"
+                        >
+                        <button type="button" class="captcha-refresh" id="captchaRefresh" title="换一个验证码">🔄</button>
+                    </div>
+                </div>
                 <button class="btn-submit" id="queryBtn" onclick="doQuery()">
                     查询录取结果
                 </button>

@@ -138,6 +138,12 @@
             const dateBtn = document.querySelector('#dateOptions .option-btn.active');
             const timeBtn = document.querySelector('#timeOptions .option-btn.active');
             const btn = document.getElementById('confirmBtn');
+
+            if (!dateBtn || !timeBtn) {
+                alert('请选择日期和时段');
+                return;
+            }
+
             const scheduleDate = dateBtn.textContent;
             const scheduleTime = timeBtn.textContent;
 
@@ -152,8 +158,12 @@
                 });
                 const data = await resp.json();
                 if (data.success) {
-                    btn.textContent = '已确认 ✓';
-                    btn.style.opacity = '0.8';
+                    btn.textContent = '✅ 已确认';
+                    btn.style.background = '#059669';
+                    btn.style.cursor = 'default';
+                    btn.style.opacity = '1';
+                    // 禁用所有选项按钮
+                    document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
                     alert(`已确认上课安排：${scheduleDate} ${scheduleTime}\n老师将尽快与您联系！`);
                 } else {
                     btn.textContent = '确认选择';

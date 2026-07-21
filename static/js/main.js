@@ -2,18 +2,46 @@
  * 录取查询系统 - 用户查询页 JS
  */
 
+let captchaToken = '';
+
+// 初始化：加载验证码
+document.addEventListener('DOMContentLoaded', () => {
+    refreshCaptcha();
+});
+
+async function refreshCaptcha() {
+    const exprEl = document.getElementById('captchaExpr');
+    exprEl.textContent = '加载中...';
+    try {
+        const resp = await fetch('/api/captcha');
+        const data = await resp.json();
+        captchaToken = data.token;
+        exprEl.textContent = data.expression;
+    } catch (err) {
+        exprEl.textContent = '加载失败';
+    }
+}
+
 async function doQuery() {
     const nameInput = document.getElementById('nameInput');
+    const captchaInput = document.getElementById('captchaInput');
     const queryBtn = document.getElementById('queryBtn');
     const resultArea = document.getElementById('resultArea');
     const resultCard = document.getElementById('resultCard');
 
     const name = nameInput.value.trim();
+    const captchaAnswer = captchaInput.value.trim();
     const classType = window.APP_CLASS_TYPE || 'kete';
 
     if (!name) {
         shakeElement(nameInput);
         nameInput.focus();
+        return;
+    }
+
+    if (!captchaAnswer) {
+        shakeElement(captchaInput);
+        captchaInput.focus();
         return;
     }
 
@@ -25,11 +53,16 @@ async function doQuery() {
         const params = new URLSearchParams();
         params.set('name', name);
         params.set('class_type', classType);
+        params.set('captcha_token', captchaToken);
+        params.set('captcha_answer', captchaAnswer);
 
         const resp = await fetch(`/api/query?${params.toString()}`);
         const data = await resp.json();
 
         if (!data.success) {
+            // 验证码错误等，刷新验证码
+            refreshCaptcha();
+            captchaInput.value = '';
             showFailResult(data.message);
         } else if (data.admitted) {
             // 录取成功 → 跳转到独立结果页，保持班型路径
@@ -41,9 +74,13 @@ async function doQuery() {
             window.location.href = '/' + classType + '/result?' + redirectParams.toString();
             return;
         } else {
+            refreshCaptcha();
+            captchaInput.value = '';
             showFailResult('未查询到录取信息', '请核对姓名是否正确');
         }
     } catch (err) {
+        refreshCaptcha();
+        captchaInput.value = '';
         showFailResult('网络错误，请稍后重试');
     } finally {
         queryBtn.disabled = false;
@@ -67,6 +104,15 @@ function showFailResult(title, subtitle) {
 // 回车触发查询
 document.getElementById('nameInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') doQuery();
+});
+document.getElementById('captchaInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') doQuery();
+});
+
+// 刷新验证码按钮
+document.getElementById('captchaRefresh').addEventListener('click', () => {
+    document.getElementById('captchaInput').value = '';
+    refreshCaptcha();
 });
 
 function shakeElement(el) {

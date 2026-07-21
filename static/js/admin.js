@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadStats();
     loadList(1);
     loadLogs(1);
+    loadAuditLogs(1);
     initFileDrop();
 });
 
@@ -83,6 +84,7 @@ async function doUpload() {
             msgEl.className = 'upload-msg ok';
             loadStats();
             loadList(1);
+            loadAuditLogs(1);
             document.getElementById('textInput').value = '';
             document.getElementById('fileInput').value = '';
         } else {
@@ -193,6 +195,7 @@ async function doBatchDelete() {
         if (data.success) {
             loadList(currentPage);
             loadStats();
+            loadAuditLogs(1);
         }
     } catch (err) { alert('删除失败，请重试'); }
 }
@@ -202,7 +205,7 @@ async function doDelete(id) {
     try {
         const resp = await fetch(`/api/admin/delete/${id}`, { method: 'DELETE' });
         const data = await resp.json();
-        if (data.success) { loadList(currentPage); loadStats(); }
+        if (data.success) { loadList(currentPage); loadStats(); loadAuditLogs(1); }
     } catch (err) { alert('删除失败，请重试'); }
 }
 
@@ -211,7 +214,7 @@ async function doClearAll() {
     try {
         const resp = await fetch('/api/admin/clear', { method: 'DELETE' });
         const data = await resp.json();
-        if (data.success) { loadList(1); loadStats(); }
+        if (data.success) { loadList(1); loadStats(); loadAuditLogs(1); }
     } catch (err) { alert('清空失败，请重试'); }
 }
 
@@ -244,7 +247,7 @@ function debounceSearch() {
 }
 
 // ═══════════════════════════════════════════
-// 查询日志
+// 查询日志（颜色标记 + 确认状态）
 // ═══════════════════════════════════════════
 
 let logCurrentPage = 1;
@@ -273,17 +276,26 @@ async function loadLogs(page) {
             return;
         }
 
-        tbody.innerHTML = data.items.map(item => `
-            <tr>
-                <td><input type="checkbox" class="log-check" value="${item.id}"></td>
-                <td><strong>${escapeHtml(item.name)}</strong></td>
-                <td>${item.class_type === 'yucai' ? '育才班' : item.class_type === 'kete' ? '科特班' : '-'}</td>
-                <td style="color:${item.admitted ? '#059669' : '#dc2626'};font-weight:600;">${item.admitted ? '✅ 已录取' : '❌ 未录取'}</td>
-                <td>${item.schedule_date || '-'}</td>
-                <td>${item.schedule_time || '-'}</td>
-                <td>${item.created_at || '-'}</td>
-            </tr>
-        `).join('');
+        tbody.innerHTML = data.items.map(item => {
+            // 行颜色：已录取绿色背景，未录取红色背景
+            const rowClass = item.admitted ? 'log-row-admitted' : 'log-row-rejected';
+            const hasConfirmed = item.schedule_date && item.schedule_time;
+            const statusHtml = item.admitted
+                ? `<span class="log-status admitted">✅ 已录取${hasConfirmed ? ' (已确认)' : ''}</span>`
+                : `<span class="log-status rejected">❌ 未录取</span>`;
+
+            return `
+                <tr class="${rowClass}">
+                    <td><input type="checkbox" class="log-check" value="${item.id}"></td>
+                    <td><strong>${escapeHtml(item.name)}</strong></td>
+                    <td>${item.class_type === 'yucai' ? '育才班' : item.class_type === 'kete' ? '科特班' : '-'}</td>
+                    <td>${statusHtml}</td>
+                    <td>${hasConfirmed ? `<span class="confirmed-badge">📅 ${item.schedule_date}</span>` : '-'}</td>
+                    <td>${item.schedule_time ? `<span class="confirmed-badge">🕐 ${item.schedule_time}</span>` : '-'}</td>
+                    <td>${item.created_at || '-'}</td>
+                </tr>
+            `;
+        }).join('');
 
         renderLogPagination(data.total, page);
         document.getElementById('logSelectAll').checked = false;
@@ -313,7 +325,7 @@ async function doBatchDeleteLogs() {
             body: JSON.stringify({ ids })
         });
         const data = await resp.json();
-        if (data.success) loadLogs(logCurrentPage);
+        if (data.success) { loadLogs(logCurrentPage); loadAuditLogs(1); }
     } catch (err) { alert('删除失败，请重试'); }
 }
 
@@ -322,7 +334,7 @@ async function doClearAllLogs() {
     try {
         const resp = await fetch('/api/admin/logs/clear', { method: 'DELETE' });
         const data = await resp.json();
-        if (data.success) loadLogs(1);
+        if (data.success) { loadLogs(1); loadAuditLogs(1); }
     } catch (err) { alert('清空失败，请重试'); }
 }
 
@@ -359,18 +371,115 @@ function doExportLogs() {
 }
 
 // ═══════════════════════════════════════════
-// 工具
+// 操作日志
+// ═══════════════════════════════════════════
+
+let auditLogPage = 1;
+
+async function loadAuditLogs(page) {
+    auditLogPage = page;
+    const tbody = document.getElementById('auditLogTableBody');
+    tbody.innerHTML = `<tr><td colspan="4" class="loading-cell">加载中...</td></tr>`;
+
+    try {
+        const params = new URLSearchParams({ page, per_page: 50 });
+        const resp = await fetch(`/api/admin/audit-logs?${params.toString()}`);
+        if (resp.status === 401) { window.location.href = '/admin'; return; }
+        const data = await resp.json();
+
+        if (!data.items.length) {
+            tbody.innerHTML = `<tr><td colspan="4" class="loading-cell">暂无操作记录</td></tr>`;
+            renderAuditLogPagination(0, page);
+            return;
+        }
+
+        // 操作类型颜色映射
+        const actionColors = {
+            '上传录取名单': '#059669',
+            '删除录取名单': '#dc2626',
+            '批量删除录取名单': '#dc2626',
+            '清空录取名单': '#dc2626',
+            '批量删除查询日志': '#d97706',
+            '清空查询日志': '#d97706',
+        };
+
+        tbody.innerHTML = data.items.map(item => {
+            const color = actionColors[item.action] || '#6366f1';
+            return `
+                <tr>
+                    <td><span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.78rem;font-weight:600;background:${color}15;color:${color};border:1px solid ${color}30;">${escapeHtml(item.action)}</span></td>
+                    <td>${escapeHtml(item.target || '-')}</td>
+                    <td>${escapeHtml(item.detail || '-')}</td>
+                    <td style="color:var(--text-secondary);font-size:0.82rem;">${item.created_at || '-'}</td>
+                </tr>
+            `;
+        }).join('');
+
+        renderAuditLogPagination(data.total, page);
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="4" class="loading-cell">加载失败，请刷新重试</td></tr>`;
+    }
+}
+
+function renderAuditLogPagination(total, page) {
+    const pagination = document.getElementById('auditLogPagination');
+    const perPage = 50;
+    const totalPages = Math.ceil(total / perPage);
+    if (totalPages <= 1) {
+        pagination.innerHTML = `<span class="page-info">共 ${total} 条</span>`;
+        return;
+    }
+    let html = '';
+    html += `<button class="page-btn" onclick="loadAuditLogs(1)" ${page === 1 ? 'disabled' : ''}>«</button>`;
+    html += `<button class="page-btn" onclick="loadAuditLogs(${page - 1})" ${page === 1 ? 'disabled' : ''}>‹</button>`;
+    const start = Math.max(1, page - 2);
+    const end = Math.min(totalPages, page + 2);
+    for (let i = start; i <= end; i++) {
+        html += `<button class="page-btn${i === page ? ' active' : ''}" onclick="loadAuditLogs(${i})">${i}</button>`;
+    }
+    html += `<button class="page-btn" onclick="loadAuditLogs(${page + 1})" ${page === totalPages ? 'disabled' : ''}>›</button>`;
+    html += `<button class="page-btn" onclick="loadAuditLogs(${totalPages})" ${page === totalPages ? 'disabled' : ''}>»</button>`;
+    html += `<span class="page-info">共 ${total} 条</span>`;
+    pagination.innerHTML = html;
+}
+
+async function doClearAllAuditLogs() {
+    if (!confirm('确定要清空全部操作日志吗？此操作不可恢复！')) return;
+    try {
+        const resp = await fetch('/api/admin/audit-logs/clear', { method: 'DELETE' });
+        const data = await resp.json();
+        if (data.success) loadAuditLogs(1);
+    } catch (err) { alert('清空失败，请重试'); }
+}
+
+// ═══════════════════════════════════════════
+// 统计概览
 // ═══════════════════════════════════════════
 
 async function loadStats() {
     try {
         const resp = await fetch('/api/admin/stats');
+        if (resp.status === 401) return;
         const data = await resp.json();
+
+        // 导航栏徽章
         document.getElementById('totalBadge').textContent = `总计: ${data.total} 人`;
         document.getElementById('keteBadge').textContent = `科特班: ${data.kete} 人`;
         document.getElementById('yucaiBadge').textContent = `育才班: ${data.yucai} 人`;
+
+        // 统计卡片
+        document.getElementById('statTotal').textContent = data.total;
+        document.getElementById('statTodayQueries').textContent = data.today_queries;
+        document.getElementById('statTotalQueries').textContent = data.total_queries;
+        document.getElementById('statConfirmed').textContent = data.confirmed;
+        document.getElementById('statRate').textContent = data.admission_rate + '%';
+        document.getElementById('statTodayNew').textContent = data.today_new;
     } catch (err) { /* ignore */ }
 }
+
+// ═══════════════════════════════════════════
+// 工具
+// ═══════════════════════════════════════════
 
 function escapeHtml(str) {
     const div = document.createElement('div');
