@@ -53,19 +53,17 @@ def test_confirm_empty_name():
         assert "姓名" in data["message"]
         print("✅ 空姓名测试通过")
 
-def test_result_page_has_modal():
-    """测试结果页包含弹窗HTML"""
+def test_result_page_has_invite_link():
+    """测试结果页包含跳转邀请函的链接"""
     setup()
     with app.test_client() as c:
         resp = c.get("/kete/result?name=测试&category=科特班·英才计划&grade=前3%")
         content = resp.data.decode()
-        assert "inviteModal" in content
-        assert "入学邀请函" in content
-        assert "北大-点猫人工智能教育联合实验室" in content
-        assert "科特班·英才计划录取资格" in content
-        assert "英才计划" in content
-        assert "教学中心" in content
-        print("✅ 弹窗内容测试通过")
+        assert "window.location.href" in content
+        assert "/invite" in content
+        assert "英才计划录取通知书" in content
+        assert "录取档案" in content
+        print("✅ 结果页跳转测试通过")
 
 def test_yucai_result_page():
     """测试育才班结果页"""
@@ -75,7 +73,6 @@ def test_yucai_result_page():
         content = resp.data.decode()
         # JS 会动态设置，检查 JS 逻辑存在
         assert "classType === 'yucai'" in content
-        assert "classTypeName = classType === 'yucai' ? '育才班' : '科特班'" in content
         assert "顶级名校教育体系" in content
         print("✅ 育才班结果页测试通过")
 

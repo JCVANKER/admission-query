@@ -290,7 +290,7 @@ def invite_page(class_type):
     student_name = request.args.get("name", "")
     schedule_date = request.args.get("date", "")
     schedule_time = request.args.get("time", "")
-    badge_text = f"{ct['name']}·英才计划录取资格"
+    badge_text = f"英才计划录取资格"
     today = datetime.now().strftime("%Y年%m月%d日")
     return render_template("invite.html",
         class_type=class_type,

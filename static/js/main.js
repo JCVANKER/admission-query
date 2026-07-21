@@ -76,7 +76,7 @@ async function doQuery() {
         } else {
             refreshCaptcha();
             captchaInput.value = '';
-            showFailResult('未查询到录取信息', '请核对姓名是否正确');
+            showFailResult('该学员未通过北大-点猫科技人工智能教育联合实验室英才计划录取线', '请联系班主任老师进行其他班型学分测验');
         }
     } catch (err) {
         refreshCaptcha();

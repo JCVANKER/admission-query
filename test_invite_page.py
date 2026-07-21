@@ -38,7 +38,7 @@ def test_invite_page_kete():
         assert "入学邀请函" in content
         assert "英才计划" in content
         assert "张三" in content
-        assert "科特班·英才计划录取资格" in content
+        assert "英才计划录取资格" in content
         assert "北大-点猫人工智能教育联合实验室" in content
         assert "深圳点猫科技有限公司" in content
         print("✅ 科特班邀请函测试通过")
@@ -52,7 +52,7 @@ def test_invite_page_yucai():
         content = resp.data.decode()
         assert "入学邀请函" in content
         assert "李四" in content
-        assert "育才班·英才计划录取资格" in content
+        assert "英才计划录取资格" in content
         print("✅ 育才班邀请函测试通过")
 
 def test_result_page_clean():

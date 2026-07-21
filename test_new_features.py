@@ -162,7 +162,10 @@ def test_audit_log_on_upload(admin_client):
 def test_audit_log_on_delete(admin_client):
     """测试删除操作被记录"""
     admin_client.post("/api/admin/upload", json={"names": [{"name": "日志测试B"}], "class_type": "kete"})
-    admin_client.delete("/api/admin/delete/1")
+    # 获取刚上传记录的ID
+    list_resp = admin_client.get("/api/admin/list?page=1&per_page=1")
+    record_id = list_resp.get_json()["items"][0]["id"]
+    admin_client.delete(f"/api/admin/delete/{record_id}")
 
     resp = admin_client.get("/api/admin/audit-logs")
     logs = resp.get_json()["items"]
@@ -223,6 +226,8 @@ def test_audit_log_clear(admin_client):
 
 def test_enhanced_stats(admin_client):
     """测试增强统计API"""
+    # 先清空确保干净
+    admin_client.delete("/api/admin/clear")
     # 上传一些数据
     admin_client.post("/api/admin/upload", json={"names": [{"name": "统计A"}, {"name": "统计B"}], "class_type": "kete"})
     admin_client.post("/api/admin/upload", json={"names": [{"name": "统计C"}], "class_type": "yucai"})

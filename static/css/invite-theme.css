@@ -191,7 +191,67 @@ body {
 }
 
 /* 手机适配 */
-@media (max-width: 400px) {
-    .invite-page { max-width: 100%; }
-    .invite-badge { font-size: 1rem; padding: 8px 18px; }
+@media (max-width: 480px) {
+    body { padding: 0; }
+    .invite-page {
+        max-width: 100%;
+        border-radius: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+    .invite-header { padding: 20px 16px 16px; }
+    .invite-logo { max-width: 160px; }
+    .invite-sub-title { font-size: 0.9rem; }
+    .invite-main-title { font-size: 1.3rem; }
+    .invite-body { padding: 24px 16px 16px; flex: 1; }
+    .invite-student { font-size: 1rem; }
+    .invite-student strong { font-size: 1.25rem; }
+    .invite-text { font-size: 0.8rem; padding: 0 4px; }
+    .invite-badge { font-size: 0.95rem; padding: 8px 18px; }
+    .invite-welcome { font-size: 0.88rem; }
+    .invite-hint { font-size: 0.72rem; margin-bottom: 20px; }
+    .invite-stamp { right: 12px; bottom: 48px; }
+    .stamp-circle { width: 56px; height: 56px; }
+    .stamp-text { font-size: 0.62rem; }
+    .stamp-sub { font-size: 0.52rem; }
+    .invite-bottom { padding: 0 2px; }
+    .invite-date { font-size: 0.72rem; }
+    .invite-company { font-size: 0.68rem; }
+    .invite-btn { height: 52px; font-size: 1rem; }
+}
+
+/* 小屏手机 */
+@media (max-width: 360px) {
+    .invite-header { padding: 16px 12px 14px; }
+    .invite-logo { max-width: 140px; }
+    .invite-main-title { font-size: 1.2rem; }
+    .invite-body { padding: 20px 12px 12px; }
+    .invite-badge { font-size: 0.88rem; padding: 7px 14px; }
+    .invite-welcome { font-size: 0.82rem; }
+}
+
+/* 平板适配 */
+@media (min-width: 768px) {
+    .invite-page { max-width: 420px; }
+    .invite-header { padding: 32px 24px 24px; }
+    .invite-logo { max-width: 200px; }
+    .invite-sub-title { font-size: 1.1rem; }
+    .invite-main-title { font-size: 1.7rem; }
+    .invite-body { padding: 36px 28px 24px; }
+    .invite-student { font-size: 1.15rem; }
+    .invite-student strong { font-size: 1.5rem; }
+    .invite-text { font-size: 0.9rem; padding: 0 12px; }
+    .invite-badge { font-size: 1.15rem; padding: 12px 28px; }
+    .invite-welcome { font-size: 1rem; }
+    .invite-hint { font-size: 0.8rem; }
+    .stamp-circle { width: 72px; height: 72px; }
+    .stamp-text { font-size: 0.78rem; }
+    .stamp-sub { font-size: 0.65rem; }
+    .invite-btn { height: 52px; font-size: 1.05rem; }
+}
+
+/* 桌面大屏 */
+@media (min-width: 1200px) {
+    .invite-page { max-width: 440px; }
 }
