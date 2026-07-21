@@ -46,17 +46,6 @@ body {
     margin: 0 auto;
 }
 
-/* 旧样式保留但不再使用 */
-.logo-row { display: none; }
-.logo-item { display: none; }
-.logo-circle { display: none; }
-.logo-icon { display: none; }
-.logo-text { display: none; }
-.logo-name { display: none; }
-.logo-en { display: none; }
-.logo-divider { display: none; }
-.lab-name { display: none; }
-
 /* ── 主内容区 ── */
 .main-content {
     padding-top: 48px;

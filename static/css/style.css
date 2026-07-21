@@ -612,19 +612,20 @@ body.admin-page .container {
     padding: 32px !important;
 }
 
-.btn-delete {
+.btn-edit {
     padding: 4px 10px;
     font-size: 0.78rem;
-    color: var(--danger);
+    color: var(--primary);
     background: transparent;
-    border: 1px solid var(--danger);
+    border: 1px solid var(--primary);
     border-radius: 4px;
     cursor: pointer;
     transition: var(--transition);
+    margin-right: 6px;
 }
 
-.btn-delete:hover {
-    background: var(--danger);
+.btn-edit:hover {
+    background: var(--primary);
     color: #fff;
 }
 

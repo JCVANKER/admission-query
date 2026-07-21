@@ -210,6 +210,28 @@ body {
     line-height: 1;
 }
 
+/* ── 打印按钮 ── */
+.print-btn {
+    display: block;
+    width: 100%;
+    height: 44px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #c53a2a;
+    background: #fff;
+    border: 1.5px solid #c53a2a;
+    border-radius: 10px;
+    cursor: pointer;
+    margin-bottom: 12px;
+    transition: all 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.print-btn:hover {
+    background: #c53a2a;
+    color: #fff;
+}
+
 /* ── 确定按钮 ── */
 .invite-btn {
     display: block;
@@ -218,15 +240,64 @@ body {
     font-size: 1rem;
     font-weight: 600;
     color: #fff;
-    background: #2563eb;
+    background: #c53a2a;
     border: none;
     cursor: pointer;
     transition: background 0.2s ease;
     -webkit-tap-highlight-color: transparent;
+    border-radius: 0 0 16px 16px;
 }
 
 .invite-btn:hover {
-    background: #1d4ed8;
+    background: #a83220;
+}
+
+/* ── 截图分享引导 ── */
+.screenshot-guide {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    z-index: 100;
+    animation: guideBounce 1.5s ease-in-out infinite;
+    transition: opacity 0.8s ease;
+}
+
+.screenshot-guide.fade-out {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.guide-arrow {
+    font-size: 1.4rem;
+    color: #c53a2a;
+    animation: arrowPulse 1s ease-in-out infinite;
+}
+
+.guide-text {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #c53a2a;
+    background: #fff;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1.5px solid #c53a2a;
+    box-shadow: 0 2px 8px rgba(197, 58, 42, 0.15);
+    white-space: nowrap;
+}
+
+@keyframes guideBounce {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(-6px); }
+}
+
+@keyframes arrowPulse {
+    0%, 100% { opacity: 1; transform: translateY(0); }
+    50% { opacity: 0.6; transform: translateY(-3px); }
 }
 
 /* ═══════════════════════════════════════════
@@ -280,6 +351,11 @@ body {
         font-size: 1rem;
         border-radius: 0 0 17px 17px;
     }
+
+    .print-btn {
+        border-radius: 10px;
+        margin-bottom: 10px;
+    }
 }
 
 /* 小屏手机 */
@@ -294,6 +370,7 @@ body {
     .invite-welcome { font-size: 0.84rem; }
     .stamp-circle { width: 58px; height: 58px; }
     .invite-btn { border-radius: 0 0 16px 16px; }
+    .print-btn { border-radius: 8px; margin-bottom: 8px; }
 }
 
 /* ═══════════════════════════════════════════
@@ -319,10 +396,48 @@ body {
     .stamp-text { font-size: 0.78rem; }
     .stamp-sub { font-size: 0.62rem; }
 
-    .invite-btn { height: 52px; font-size: 1.05rem; }
+    .invite-btn { height: 52px; font-size: 1.05rem; border-radius: 0 0 16px 16px; }
+    .print-btn { height: 46px; font-size: 0.95rem; border-radius: 10px; margin-bottom: 12px; }
 }
 
-/* 桌面大屏 */
+/* ═══════════════════════════════════════════
+   打印样式优化
+   ═══════════════════════════════════════════ */
+@media print {
+    body {
+        background: #fff !important;
+        padding: 0 !important;
+        display: block !important;
+    }
+    .invite-page {
+        box-shadow: none !important;
+        border: 2px solid #c53a2a !important;
+        max-width: 100% !important;
+        border-radius: 0 !important;
+    }
+    .print-btn,
+    .invite-btn,
+    .screenshot-guide {
+        display: none !important;
+    }
+    .invite-header {
+        background: #c53a2a !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    .invite-badge {
+        border: 2px solid #d4a84b !important;
+    }
+    .stamp-circle {
+        border: 2.5px solid #c53a2a !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+
+/* ═══════════════════════════════════════════
+   桌面大屏
+   ═══════════════════════════════════════════ */
 @media (min-width: 1200px) {
     .invite-page { max-width: 440px; }
 }

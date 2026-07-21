@@ -42,6 +42,15 @@
             </div>
         </div>
 
+        <!-- 打印按钮 -->
+        <button class="print-btn" onclick="window.print()">🖨️ 打印通知书</button>
+
+        <!-- 截图分享引导 -->
+        <div class="screenshot-guide" id="screenshotGuide">
+            <div class="guide-arrow">⬆</div>
+            <div class="guide-text">截图分享给老师</div>
+        </div>
+
         <!-- 确定按钮 -->
         <button class="invite-btn" onclick="window.location.href='/{{ class_type }}'">确定</button>
     </div>
@@ -64,6 +73,12 @@
             needsTags.innerHTML = needsList.map(n => `<span class="need-tag">${n}</span>`).join('');
             needsSection.style.display = 'block';
         }
+
+        // 截图引导：3秒后自动淡出
+        setTimeout(() => {
+            const guide = document.getElementById('screenshotGuide');
+            if (guide) guide.classList.add('fade-out');
+        }, 4000);
     </script>
 </body>
 </html>

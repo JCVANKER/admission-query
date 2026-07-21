@@ -185,7 +185,10 @@ async function loadList(page) {
                 <td><strong>${escapeHtml(item.name)}</strong></td>
                 <td>${item.class_type === 'yucai' ? '育才班' : '科特班'}</td>
                 <td>${item.created_at || '-'}</td>
-                <td><button class="btn-delete" onclick="doDelete(${item.id})">删除</button></td>
+                <td>
+                    <button class="btn-edit" onclick="doEdit(${item.id}, '${escapeHtml(item.name)}', '${item.class_type}')">编辑</button>
+                    <button class="btn-delete" onclick="doDelete(${item.id})">删除</button>
+                </td>
             </tr>
         `).join('');
 
@@ -232,6 +235,32 @@ async function doDelete(id) {
         const data = await resp.json();
         if (data.success) { loadList(currentPage); loadStats(); loadAuditLogs(1); }
     } catch (err) { alert('删除失败，请重试'); }
+}
+
+async function doEdit(id, currentName, currentClassType) {
+    const newName = prompt('请输入新的姓名：', currentName);
+    if (newName === null) return; // 用户取消
+    const newNameTrim = newName.trim();
+    if (!newNameTrim) { alert('姓名不能为空'); return; }
+
+    const newClassType = confirm('当前班型：' + (currentClassType === 'yucai' ? '育才班' : '科特班') + '\n\n点击「确定」切换为「科特班」，点击「取消」切换为「育才班」')
+        ? 'kete' : 'yucai';
+
+    try {
+        const resp = await fetch(`/api/admin/update/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newNameTrim, class_type: newClassType })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            loadList(currentPage);
+            loadStats();
+            loadAuditLogs(1);
+        } else {
+            alert(data.message || '编辑失败');
+        }
+    } catch (err) { alert('网络错误，请重试'); }
 }
 
 async function doClearAll() {
@@ -392,6 +421,10 @@ function debounceLogSearch() {
 
 function doExportLogs() {
     window.location.href = '/api/admin/logs/export';
+}
+
+function doExportList() {
+    window.location.href = '/api/admin/list/export';
 }
 
 // ═══════════════════════════════════════════

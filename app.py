@@ -302,28 +302,32 @@ def invite_page(class_type):
         return redirect("/kete/invite")
     ct = CLASS_TYPES[class_type]
     student_name = request.args.get("name", "")
-    schedule_date = request.args.get("date", "")
-    schedule_time = request.args.get("time", "")
     badge_text = f"英才计划录取资格"
     today = datetime.now().strftime("%Y年%m月%d日")
     return render_template("invite.html",
         class_type=class_type,
         class_name=ct["name"],
         student_name=student_name,
-        schedule_date=schedule_date,
-        schedule_time=schedule_time,
         badge_text=badge_text,
         today_date=today)
 
 
 @app.route("/api/captcha")
 def get_captcha():
-    """生成数学验证码，返回 token 和表达式"""
+    """生成数学验证码，返回 token 和表达式（先生成时自动清理过期验证码）"""
     import uuid
+
+    # 自动清理超过10分钟的未使用验证码
+    # 注意：created_at 存储的是 UTC 时间（触发器已转换），所以用 datetime('now') 比较
+    db = get_db()
+    db.execute(
+        "DELETE FROM captcha_store WHERE used = 0 AND datetime(created_at, '+10 minutes') < datetime('now')"
+    )
+    db.commit()
+
     expression, answer = generate_captcha()
     token = uuid.uuid4().hex[:16]
 
-    db = get_db()
     db.execute(
         "INSERT INTO captcha_store (token, answer) VALUES (?, ?)",
         (token, answer)
@@ -560,6 +564,74 @@ def admin_list():
     })
 
 
+@app.route("/api/admin/update/<int:record_id>", methods=["PUT"])
+@api_login_required
+def admin_update(record_id):
+    """编辑录取名单的姓名或班型"""
+    data = request.get_json()
+    new_name = data.get("name", "").strip()
+    new_class_type = data.get("class_type", "").strip()
+
+    if not new_name:
+        return jsonify({"success": False, "message": "姓名不能为空"})
+    if new_class_type not in CLASS_TYPES:
+        return jsonify({"success": False, "message": "班型无效"})
+
+    db = get_db()
+    # 检查目标姓名+班型是否已存在（排除自身）
+    existing = db.execute(
+        "SELECT id FROM admissions WHERE name = ? AND class_type = ? AND id != ?",
+        (new_name, new_class_type, record_id)
+    ).fetchone()
+    if existing:
+        return jsonify({"success": False, "message": "该姓名在此班型下已存在"})
+
+    # 获取旧记录用于日志
+    old = db.execute(
+        "SELECT name, class_type FROM admissions WHERE id = ?", (record_id,)
+    ).fetchone()
+    if not old:
+        return jsonify({"success": False, "message": "记录不存在"})
+
+    db.execute(
+        "UPDATE admissions SET name = ?, class_type = ? WHERE id = ?",
+        (new_name, new_class_type, record_id)
+    )
+    db.commit()
+
+    log_audit("编辑录取名单",
+              old["name"],
+              f"姓名: {old['name']}→{new_name}, 班型: {CLASS_TYPES.get(old['class_type'], {}).get('name', old['class_type'])}→{CLASS_TYPES.get(new_class_type, {}).get('name', new_class_type)}")
+
+    return jsonify({"success": True})
+
+
+@app.route("/api/admin/list/export")
+@api_login_required
+def admin_list_export():
+    """导出录取名单为 CSV"""
+    db = get_db()
+    rows = db.execute(
+        "SELECT name, class_type, created_at FROM admissions ORDER BY id DESC"
+    ).fetchall()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["姓名", "班型", "添加时间"])
+    for r in rows:
+        writer.writerow([
+            r["name"],
+            CLASS_TYPES.get(r["class_type"], {}).get("name", r["class_type"] or "-"),
+            r["created_at"]
+        ])
+
+    output.seek(0)
+    resp = make_response(output.getvalue())
+    resp.headers["Content-Type"] = "text/csv; charset=utf-8-sig"
+    resp.headers["Content-Disposition"] = "attachment; filename=admissions_list.csv"
+    return resp
+
+
 @app.route("/api/admin/delete/<int:record_id>", methods=["DELETE"])
 @api_login_required
 def admin_delete(record_id):
@@ -759,9 +831,9 @@ def admin_audit_logs_clear():
 
 @app.route("/api/captcha/cleanup")
 def captcha_cleanup():
-    """清理超过10分钟的未使用验证码（可配置定时任务调用）"""
+    """手动触发清理超过10分钟的未使用验证码"""
     db = get_db()
-    db.execute("DELETE FROM captcha_store WHERE used = 0 AND datetime(created_at, '+10 minutes') < datetime('now', 'localtime')")
+    db.execute("DELETE FROM captcha_store WHERE used = 0 AND datetime(created_at, '+10 minutes') < datetime('now')")
     db.commit()
     return jsonify({"success": True})
 
