@@ -1,0 +1,24 @@
+# Render 部署配置
+# 文档: https://render.com/docs
+
+services:
+  - type: web
+    name: admission-query
+    env: python
+    region: singapore  # 新加坡节点，国内访问较快
+    plan: free         # 免费方案
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 4 --timeout 120
+    envVars:
+      - key: DB_TYPE
+        value: sqlite
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false       # 手动在 Render Dashboard 设置
+    disk:
+      name: sqlite-data
+      mountPath: /opt/render/project/src
+      sizeGB: 1

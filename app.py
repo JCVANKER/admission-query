@@ -6,10 +6,15 @@ import time
 import uuid
 import threading
 import queue
+import sqlite3 as sqlite3_module
 from datetime import datetime
 
-import pymysql
-import pymysql.cursors
+try:
+    import pymysql
+    import pymysql.cursors
+    HAS_PYMYSQL = True
+except ImportError:
+    HAS_PYMYSQL = False
 from flask import Flask, g, render_template, request, jsonify, redirect, url_for, session, make_response
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
@@ -33,16 +38,22 @@ def inject_version():
 
 
 # ═══════════════════════════════════════════
-# MySQL 数据库连接池
+# 数据库（MySQL / SQLite 自适应）
 # ═══════════════════════════════════════════
 
+DB_IS_MYSQL = (Config.DB_TYPE == "mysql")
+
+
 class DB:
-    """MySQL 数据库封装，兼容 pymysql cursor 但提供类 sqlite3 的接口"""
+    """统一数据库封装，兼容 MySQL pymysql cursor 和 SQLite cursor"""
     def __init__(self, conn, cursor):
         self._conn = conn
         self._cursor = cursor
 
     def execute(self, sql, params=None):
+        # MySQL 用 %s 占位符，SQLite 用 ?，这里统一转换
+        if not DB_IS_MYSQL:
+            sql = sql.replace("%s", "?")
         self._cursor.execute(sql, params or ())
         return self._cursor
 
@@ -56,6 +67,10 @@ class DB:
     def rowcount(self):
         return self._cursor.rowcount
 
+    @property
+    def lastrowid(self):
+        return self._cursor.lastrowid
+
     def commit(self):
         self._conn.commit()
 
@@ -68,19 +83,25 @@ class DB:
 
 
 def get_db():
-    """获取 MySQL 数据库连接（请求级别复用）"""
+    """获取数据库连接（请求级别复用）"""
     if "db" not in g:
-        conn = pymysql.connect(
-            host=app.config["MYSQL_HOST"],
-            port=app.config["MYSQL_PORT"],
-            user=app.config["MYSQL_USER"],
-            password=app.config["MYSQL_PASSWORD"],
-            database=app.config["MYSQL_DATABASE"],
-            charset="utf8mb4",
-            cursorclass=pymysql.cursors.DictCursor,
-            autocommit=False,
-        )
-        g.db = DB(conn, conn.cursor())
+        if DB_IS_MYSQL:
+            conn = pymysql.connect(
+                host=app.config["MYSQL_HOST"],
+                port=app.config["MYSQL_PORT"],
+                user=app.config["MYSQL_USER"],
+                password=app.config["MYSQL_PASSWORD"],
+                database=app.config["MYSQL_DATABASE"],
+                charset="utf8mb4",
+                cursorclass=pymysql.cursors.DictCursor,
+                autocommit=False,
+            )
+            g.db = DB(conn, conn.cursor())
+        else:
+            conn = sqlite3_module.connect(Config.DATABASE)
+            conn.row_factory = sqlite3_module.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            g.db = DB(conn, conn.cursor())
     return g.db
 
 
@@ -97,126 +118,170 @@ def close_db(exception):
 
 
 def init_db():
-    """初始化数据库表结构并执行自动迁移"""
-    db = pymysql.connect(
-        host=app.config["MYSQL_HOST"],
-        port=app.config["MYSQL_PORT"],
-        user=app.config["MYSQL_USER"],
-        password=app.config["MYSQL_PASSWORD"],
-        database=app.config["MYSQL_DATABASE"],
-        charset="utf8mb4",
-        cursorclass=pymysql.cursors.DictCursor,
-        autocommit=True,
-    )
-    cur = db.cursor()
+    """初始化数据库表结构并执行自动迁移（MySQL / SQLite 自适应）"""
+    if DB_IS_MYSQL:
+        db = pymysql.connect(
+            host=app.config["MYSQL_HOST"],
+            port=app.config["MYSQL_PORT"],
+            user=app.config["MYSQL_USER"],
+            password=app.config["MYSQL_PASSWORD"],
+            database=app.config["MYSQL_DATABASE"],
+            charset="utf8mb4",
+            cursorclass=pymysql.cursors.DictCursor,
+            autocommit=True,
+        )
+        cur = db.cursor()
+        engine_sql = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        int_pk = "INT AUTO_INCREMENT PRIMARY KEY"
+        varchar = "VARCHAR"
+        timestamp_default = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        tinyint = "TINYINT"
+        text_type = "TEXT"
+    else:
+        db = sqlite3_module.connect(Config.DATABASE)
+        db.row_factory = sqlite3_module.Row
+        db.execute("PRAGMA journal_mode=WAL")
+        cur = db.cursor()
+        engine_sql = ""
+        int_pk = "INTEGER PRIMARY KEY AUTOINCREMENT"
+        varchar = "TEXT"
+        timestamp_default = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        tinyint = "INTEGER"
+        text_type = "TEXT"
 
-    cur.execute("""
+    def _exec(sql, params=None):
+        # 替换 MySQL 专有语法
+        sql = sql.replace("ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", engine_sql)
+        if not DB_IS_MYSQL:
+            sql = sql.replace("INT AUTO_INCREMENT PRIMARY KEY", int_pk)
+            sql = sql.replace("VARCHAR", varchar)
+            sql = sql.replace("TINYINT", tinyint)
+            sql = sql.replace("TEXT", text_type)
+            sql = sql.replace("%s", "?")
+            # SQLite 不支持 ALTER TABLE ADD COLUMN 后的 AFTER
+            import re
+            sql = re.sub(r'\s+AFTER\s+\w+', '', sql, flags=re.IGNORECASE)
+        cur.execute(sql, params or ())
+        if not DB_IS_MYSQL:
+            db.commit()
+
+    _exec(f"""
         CREATE TABLE IF NOT EXISTS admissions (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(64) NOT NULL,
-            category VARCHAR(128) DEFAULT '',
-            class_type VARCHAR(16) DEFAULT 'kete',
-            grade VARCHAR(16) DEFAULT '',
-            score VARCHAR(16) DEFAULT '',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_admissions_name (name),
-            INDEX idx_admissions_class (class_type)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            id {int_pk},
+            name {varchar}(64) NOT NULL,
+            category {varchar}(128) DEFAULT '',
+            class_type {varchar}(16) DEFAULT 'kete',
+            grade {varchar}(16) DEFAULT '',
+            score {varchar}(16) DEFAULT '',
+            created_at {timestamp_default}
+        ) {engine_sql}
     """)
 
-    cur.execute("""
+    _exec(f"""
         CREATE TABLE IF NOT EXISTS query_logs (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(64) NOT NULL,
-            admitted TINYINT DEFAULT 0,
-            class_type VARCHAR(16) DEFAULT '',
-            needs TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_query_logs_name (name),
-            INDEX idx_query_logs_class (class_type),
-            INDEX idx_query_logs_created (created_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            id {int_pk},
+            name {varchar}(64) NOT NULL,
+            admitted {tinyint} DEFAULT 0,
+            class_type {varchar}(16) DEFAULT '',
+            needs {text_type},
+            created_at {timestamp_default}
+        ) {engine_sql}
     """)
 
-    cur.execute("""
+    _exec(f"""
         CREATE TABLE IF NOT EXISTS admin_audit_log (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            action VARCHAR(64) NOT NULL,
-            target VARCHAR(128) DEFAULT '',
-            detail VARCHAR(512) DEFAULT '',
-            admin_user VARCHAR(32) DEFAULT 'admin',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            id {int_pk},
+            action {varchar}(64) NOT NULL,
+            target {varchar}(128) DEFAULT '',
+            detail {varchar}(512) DEFAULT '',
+            admin_user {varchar}(32) DEFAULT 'admin',
+            created_at {timestamp_default}
+        ) {engine_sql}
     """)
 
-    cur.execute("""
+    _exec(f"""
         CREATE TABLE IF NOT EXISTS captcha_store (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            token VARCHAR(32) NOT NULL UNIQUE,
+            id {int_pk},
+            token {varchar}(32) NOT NULL UNIQUE,
             answer INT NOT NULL,
-            used TINYINT DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_captcha_token (token)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            used {tinyint} DEFAULT 0,
+            created_at {timestamp_default}
+        ) {engine_sql}
     """)
 
-    cur.execute("""
+    _exec(f"""
         CREATE TABLE IF NOT EXISTS login_attempts (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            ip_address VARCHAR(64) NOT NULL,
-            success TINYINT DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_login_ip (ip_address, created_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            id {int_pk},
+            ip_address {varchar}(64) NOT NULL,
+            success {tinyint} DEFAULT 0,
+            created_at {timestamp_default}
+        ) {engine_sql}
     """)
 
-    cur.execute("""
+    _exec(f"""
         CREATE TABLE IF NOT EXISTS schema_version (
             version INT PRIMARY KEY,
-            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            applied_at {timestamp_default}
+        ) {engine_sql}
     """)
 
     # 获取当前 schema 版本
-    cur.execute("SELECT MAX(version) as v FROM schema_version")
-    row = cur.fetchone()
+    db_wrapper = DB(db, cur)
+    db_wrapper.execute("SELECT MAX(version) as v FROM schema_version")
+    row = db_wrapper.fetchone()
     current_version = row["v"] if row and row["v"] is not None else 0
 
-    # 迁移脚本（按版本号递增）
+    # 创建索引（SQLite 版本）
+    if not DB_IS_MYSQL:
+        for idx_sql in [
+            "CREATE INDEX IF NOT EXISTS idx_admissions_name ON admissions(name)",
+            "CREATE INDEX IF NOT EXISTS idx_admissions_class ON admissions(class_type)",
+            "CREATE INDEX IF NOT EXISTS idx_query_logs_name ON query_logs(name)",
+            "CREATE INDEX IF NOT EXISTS idx_query_logs_class ON query_logs(class_type)",
+            "CREATE INDEX IF NOT EXISTS idx_query_logs_created ON query_logs(created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_captcha_token ON captcha_store(token)",
+            "CREATE INDEX IF NOT EXISTS idx_login_ip ON login_attempts(ip_address, created_at)",
+        ]:
+            try:
+                cur.execute(idx_sql)
+                db.commit()
+            except Exception:
+                pass
+
+    # 迁移脚本
     migrations = {
         1: [
             "ALTER TABLE admissions ADD COLUMN class_type VARCHAR(16) DEFAULT 'kete'",
             "ALTER TABLE query_logs ADD COLUMN class_type VARCHAR(16) DEFAULT ''",
         ],
         2: [
-            """CREATE TABLE IF NOT EXISTS admin_audit_log (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                action VARCHAR(64) NOT NULL,
-                target VARCHAR(128) DEFAULT '',
-                detail VARCHAR(512) DEFAULT '',
-                admin_user VARCHAR(32) DEFAULT 'admin',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
-            """CREATE TABLE IF NOT EXISTS captcha_store (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                token VARCHAR(32) NOT NULL UNIQUE,
+            f"""CREATE TABLE IF NOT EXISTS admin_audit_log (
+                id {int_pk},
+                action {varchar}(64) NOT NULL,
+                target {varchar}(128) DEFAULT '',
+                detail {varchar}(512) DEFAULT '',
+                admin_user {varchar}(32) DEFAULT 'admin',
+                created_at {timestamp_default}
+            ) {engine_sql}""",
+            f"""CREATE TABLE IF NOT EXISTS captcha_store (
+                id {int_pk},
+                token {varchar}(32) NOT NULL UNIQUE,
                 answer INT NOT NULL,
-                used TINYINT DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
+                used {tinyint} DEFAULT 0,
+                created_at {timestamp_default}
+            ) {engine_sql}""",
         ],
-        3: [],  # 触发器迁移，MySQL 不需要
+        3: [],
         4: [
             "ALTER TABLE query_logs ADD COLUMN needs TEXT",
         ],
         5: [
-            """CREATE TABLE IF NOT EXISTS login_attempts (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                ip_address VARCHAR(64) NOT NULL,
-                success TINYINT DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_login_ip (ip_address, created_at)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
+            f"""CREATE TABLE IF NOT EXISTS login_attempts (
+                id {int_pk},
+                ip_address {varchar}(64) NOT NULL,
+                success {tinyint} DEFAULT 0,
+                created_at {timestamp_default}
+            ) {engine_sql}""",
         ],
     }
 
@@ -227,18 +292,22 @@ def init_db():
             if not sql:
                 continue
             try:
-                cur.execute(sql)
+                _exec(sql)
             except Exception as e:
-                if "Duplicate column" in str(e) or "already exists" in str(e):
+                err_msg = str(e)
+                if "Duplicate column" in err_msg or "already exists" in err_msg or "duplicate column name" in err_msg.lower():
                     pass
                 else:
                     print(f"[DB Migration] v{ver} error: {e}")
-        cur.execute("INSERT INTO schema_version (version) VALUES (%s)", (ver,))
+        _exec("INSERT INTO schema_version (version) VALUES (%s)", (ver,))
         print(f"[DB Migration] v{ver} applied")
 
     cur.close()
-    db.close()
-    print("[DB] MySQL initialized successfully")
+    if not DB_IS_MYSQL:
+        db.close()
+    else:
+        db.close()
+    print(f"[DB] Initialized successfully (type={Config.DB_TYPE})")
 
 
 # 应用启动时初始化数据库
@@ -253,16 +322,21 @@ _log_queue = queue.Queue()
 
 
 def _log_writer_thread():
-    """后台线程：从队列取出日志写入 MySQL，批量提交"""
-    conn = pymysql.connect(
-        host=app.config["MYSQL_HOST"],
-        port=app.config["MYSQL_PORT"],
-        user=app.config["MYSQL_USER"],
-        password=app.config["MYSQL_PASSWORD"],
-        database=app.config["MYSQL_DATABASE"],
-        charset="utf8mb4",
-        autocommit=False,
-    )
+    """后台线程：从队列取出日志写入数据库，批量提交"""
+    if DB_IS_MYSQL:
+        conn = pymysql.connect(
+            host=app.config["MYSQL_HOST"],
+            port=app.config["MYSQL_PORT"],
+            user=app.config["MYSQL_USER"],
+            password=app.config["MYSQL_PASSWORD"],
+            database=app.config["MYSQL_DATABASE"],
+            charset="utf8mb4",
+            autocommit=False,
+        )
+    else:
+        conn = sqlite3_module.connect(Config.DATABASE)
+        conn.row_factory = sqlite3_module.Row
+        conn.execute("PRAGMA journal_mode=WAL")
     cur = conn.cursor()
     batch = []
     last_flush = time.time()
@@ -293,10 +367,16 @@ def _log_writer_thread():
 def _flush_batch(cur, conn, batch):
     """批量写入日志"""
     try:
-        cur.executemany(
-            "INSERT INTO query_logs (name, admitted, class_type) VALUES (%s, %s, %s)",
-            batch,
-        )
+        if DB_IS_MYSQL:
+            cur.executemany(
+                "INSERT INTO query_logs (name, admitted, class_type) VALUES (%s, %s, %s)",
+                batch,
+            )
+        else:
+            cur.executemany(
+                "INSERT INTO query_logs (name, admitted, class_type) VALUES (?, ?, ?)",
+                batch,
+            )
         conn.commit()
     except Exception:
         try:
@@ -351,20 +431,31 @@ def generate_captcha():
 
 def log_audit(action, target="", detail=""):
     try:
-        conn = pymysql.connect(
-            host=app.config["MYSQL_HOST"],
-            port=app.config["MYSQL_PORT"],
-            user=app.config["MYSQL_USER"],
-            password=app.config["MYSQL_PASSWORD"],
-            database=app.config["MYSQL_DATABASE"],
-            charset="utf8mb4",
-            autocommit=True,
-        )
+        if DB_IS_MYSQL:
+            conn = pymysql.connect(
+                host=app.config["MYSQL_HOST"],
+                port=app.config["MYSQL_PORT"],
+                user=app.config["MYSQL_USER"],
+                password=app.config["MYSQL_PASSWORD"],
+                database=app.config["MYSQL_DATABASE"],
+                charset="utf8mb4",
+                autocommit=True,
+            )
+        else:
+            conn = sqlite3_module.connect(Config.DATABASE)
+            conn.row_factory = sqlite3_module.Row
+            conn.execute("PRAGMA journal_mode=WAL")
         cur = conn.cursor()
-        cur.execute(
-            "INSERT INTO admin_audit_log (action, target, detail) VALUES (%s, %s, %s)",
-            (action, target, detail),
-        )
+        if not DB_IS_MYSQL:
+            cur.execute(
+                "INSERT INTO admin_audit_log (action, target, detail) VALUES (?, ?, ?)",
+                (action, target, detail),
+            )
+        else:
+            cur.execute(
+                "INSERT INTO admin_audit_log (action, target, detail) VALUES (%s, %s, %s)",
+                (action, target, detail),
+            )
         cur.close()
         conn.close()
     except Exception:
@@ -417,12 +508,20 @@ def admin_login():
     db = get_db()
 
     failed_count = 0
-    row = db.execute(
-        """SELECT COUNT(*) as cnt FROM login_attempts
-           WHERE ip_address = %s AND success = 0
-           AND created_at > DATE_SUB(NOW(), INTERVAL %s MINUTE)""",
-        (client_ip, app.config["LOGIN_LOCKOUT_MINUTES"]),
-    ).fetchone()
+    if DB_IS_MYSQL:
+        row = db.execute(
+            """SELECT COUNT(*) as cnt FROM login_attempts
+               WHERE ip_address = %s AND success = 0
+               AND created_at > DATE_SUB(NOW(), INTERVAL %s MINUTE)""",
+            (client_ip, app.config["LOGIN_LOCKOUT_MINUTES"]),
+        ).fetchone()
+    else:
+        row = db.execute(
+            """SELECT COUNT(*) as cnt FROM login_attempts
+               WHERE ip_address = %s AND success = 0
+               AND created_at > datetime('now', '-' || %s || ' minutes')""",
+            (client_ip, str(app.config["LOGIN_LOCKOUT_MINUTES"])),
+        ).fetchone()
     if row:
         failed_count = row["cnt"]
 
