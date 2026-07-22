@@ -1,13 +1,16 @@
 import random
-import sqlite3
 import os
 import csv
 import io
 import time
-import json
+import uuid
+import threading
+import queue
 from datetime import datetime
 
-from flask import Flask, g, render_template, request, jsonify, redirect, url_for, flash, session, make_response
+import pymysql
+import pymysql.cursors
+from flask import Flask, g, render_template, request, jsonify, redirect, url_for, session, make_response
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 
@@ -20,21 +23,64 @@ app.config.from_object(Config)
 # Session 过期配置
 app.config["PERMANENT_SESSION_LIFETIME"] = Config.PERMANENT_SESSION_LIFETIME
 
-# 静态文件版本号：基于 app.py 修改时间，部署更新后自动变化，强制浏览器刷新缓存
+# 静态文件版本号
 APP_VERSION = str(int(os.path.getmtime(__file__)))
+
 
 @app.context_processor
 def inject_version():
     return dict(app_version=APP_VERSION)
 
 
-# ──────────────────── 数据库 ────────────────────
+# ═══════════════════════════════════════════
+# MySQL 数据库连接池
+# ═══════════════════════════════════════════
+
+class DB:
+    """MySQL 数据库封装，兼容 pymysql cursor 但提供类 sqlite3 的接口"""
+    def __init__(self, conn, cursor):
+        self._conn = conn
+        self._cursor = cursor
+
+    def execute(self, sql, params=None):
+        self._cursor.execute(sql, params or ())
+        return self._cursor
+
+    def fetchone(self):
+        return self._cursor.fetchone()
+
+    def fetchall(self):
+        return self._cursor.fetchall()
+
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        self._cursor.close()
+        self._conn.close()
+
 
 def get_db():
+    """获取 MySQL 数据库连接（请求级别复用）"""
     if "db" not in g:
-        g.db = sqlite3.connect(app.config["DATABASE"])
-        g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA journal_mode=WAL")
+        conn = pymysql.connect(
+            host=app.config["MYSQL_HOST"],
+            port=app.config["MYSQL_PORT"],
+            user=app.config["MYSQL_USER"],
+            password=app.config["MYSQL_PASSWORD"],
+            database=app.config["MYSQL_DATABASE"],
+            charset="utf8mb4",
+            cursorclass=pymysql.cursors.DictCursor,
+            autocommit=False,
+        )
+        g.db = DB(conn, conn.cursor())
     return g.db
 
 
@@ -42,132 +88,231 @@ def get_db():
 def close_db(exception):
     db = g.pop("db", None)
     if db is not None:
-        db.close()
+        try:
+            if exception:
+                db.rollback()
+            db.close()
+        except Exception:
+            pass
 
 
 def init_db():
     """初始化数据库表结构并执行自动迁移"""
-    db = sqlite3.connect(app.config["DATABASE"])
-    db.execute("PRAGMA journal_mode=WAL")
+    db = pymysql.connect(
+        host=app.config["MYSQL_HOST"],
+        port=app.config["MYSQL_PORT"],
+        user=app.config["MYSQL_USER"],
+        password=app.config["MYSQL_PASSWORD"],
+        database=app.config["MYSQL_DATABASE"],
+        charset="utf8mb4",
+        cursorclass=pymysql.cursors.DictCursor,
+        autocommit=True,
+    )
+    cur = db.cursor()
 
-    # 创建基础表（使用 datetime('now', 'localtime') 确保北京时间）
-    db.executescript("""
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS admissions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            category TEXT DEFAULT '',
-            class_type TEXT DEFAULT 'kete',
-            grade TEXT DEFAULT '',
-            score TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
-        );
-        CREATE INDEX IF NOT EXISTS idx_admissions_name ON admissions(name);
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(64) NOT NULL,
+            category VARCHAR(128) DEFAULT '',
+            class_type VARCHAR(16) DEFAULT 'kete',
+            grade VARCHAR(16) DEFAULT '',
+            score VARCHAR(16) DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_admissions_name (name),
+            INDEX idx_admissions_class (class_type)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
 
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS query_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            admitted INTEGER DEFAULT 0,
-            class_type TEXT DEFAULT '',
-            schedule_date TEXT DEFAULT '',
-            schedule_time TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
-        );
-        CREATE INDEX IF NOT EXISTS idx_query_logs_name ON query_logs(name);
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(64) NOT NULL,
+            admitted TINYINT DEFAULT 0,
+            class_type VARCHAR(16) DEFAULT '',
+            needs TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_query_logs_name (name),
+            INDEX idx_query_logs_class (class_type),
+            INDEX idx_query_logs_created (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
 
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS admin_audit_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            action TEXT NOT NULL,
-            target TEXT DEFAULT '',
-            detail TEXT DEFAULT '',
-            admin_user TEXT DEFAULT 'admin',
-            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
-        );
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            action VARCHAR(64) NOT NULL,
+            target VARCHAR(128) DEFAULT '',
+            detail VARCHAR(512) DEFAULT '',
+            admin_user VARCHAR(32) DEFAULT 'admin',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
 
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS captcha_store (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            token TEXT NOT NULL UNIQUE,
-            answer INTEGER NOT NULL,
-            used INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
-        );
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            token VARCHAR(32) NOT NULL UNIQUE,
+            answer INT NOT NULL,
+            used TINYINT DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_captcha_token (token)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
 
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS login_attempts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ip_address TEXT NOT NULL,
-            success INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
-        );
-        CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip_address, created_at);
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ip_address VARCHAR(64) NOT NULL,
+            success TINYINT DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_login_ip (ip_address, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
 
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS schema_version (
-            version INTEGER PRIMARY KEY,
-            applied_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
-        );
+            version INT PRIMARY KEY,
+            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
 
     # 获取当前 schema 版本
-    cur = db.execute("SELECT MAX(version) FROM schema_version")
+    cur.execute("SELECT MAX(version) as v FROM schema_version")
     row = cur.fetchone()
-    current_version = row[0] if row[0] is not None else 0
+    current_version = row["v"] if row and row["v"] is not None else 0
 
-    # 迁移脚本列表（按版本号递增）
+    # 迁移脚本（按版本号递增）
     migrations = {
         1: [
-            "ALTER TABLE admissions ADD COLUMN class_type TEXT DEFAULT 'kete'",
-            "ALTER TABLE query_logs ADD COLUMN class_type TEXT DEFAULT ''",
+            "ALTER TABLE admissions ADD COLUMN class_type VARCHAR(16) DEFAULT 'kete'",
+            "ALTER TABLE query_logs ADD COLUMN class_type VARCHAR(16) DEFAULT ''",
         ],
         2: [
-            "CREATE TABLE IF NOT EXISTS admin_audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT NOT NULL, target TEXT DEFAULT '', detail TEXT DEFAULT '', admin_user TEXT DEFAULT 'admin', created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')))",
-            "CREATE TABLE IF NOT EXISTS captcha_store (id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT NOT NULL UNIQUE, answer INTEGER NOT NULL, used INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')))",
+            """CREATE TABLE IF NOT EXISTS admin_audit_log (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                action VARCHAR(64) NOT NULL,
+                target VARCHAR(128) DEFAULT '',
+                detail VARCHAR(512) DEFAULT '',
+                admin_user VARCHAR(32) DEFAULT 'admin',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
+            """CREATE TABLE IF NOT EXISTS captcha_store (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                token VARCHAR(32) NOT NULL UNIQUE,
+                answer INT NOT NULL,
+                used TINYINT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
         ],
-        3: [
-            # 为现有表添加触发器，在插入时将 UTC 时间转换为北京时间
-            "DROP TRIGGER IF EXISTS trg_admissions_localtime",
-            "CREATE TRIGGER trg_admissions_localtime AFTER INSERT ON admissions BEGIN UPDATE admissions SET created_at = datetime(NEW.created_at, '+8 hours') WHERE id = NEW.id; END",
-            "DROP TRIGGER IF EXISTS trg_query_logs_localtime",
-            "CREATE TRIGGER trg_query_logs_localtime AFTER INSERT ON query_logs BEGIN UPDATE query_logs SET created_at = datetime(NEW.created_at, '+8 hours') WHERE id = NEW.id; END",
-            "DROP TRIGGER IF EXISTS trg_audit_log_localtime",
-            "CREATE TRIGGER trg_audit_log_localtime AFTER INSERT ON admin_audit_log BEGIN UPDATE admin_audit_log SET created_at = datetime(NEW.created_at, '+8 hours') WHERE id = NEW.id; END",
-            "DROP TRIGGER IF EXISTS trg_captcha_store_localtime",
-            "CREATE TRIGGER trg_captcha_store_localtime AFTER INSERT ON captcha_store BEGIN UPDATE captcha_store SET created_at = datetime(NEW.created_at, '+8 hours') WHERE id = NEW.id; END",
-        ],
+        3: [],  # 触发器迁移，MySQL 不需要
         4: [
-            "ALTER TABLE query_logs ADD COLUMN needs TEXT DEFAULT ''",
+            "ALTER TABLE query_logs ADD COLUMN needs TEXT",
         ],
         5: [
-            "CREATE TABLE IF NOT EXISTS login_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, ip_address TEXT NOT NULL, success INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')))",
-            "CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip_address, created_at)",
+            """CREATE TABLE IF NOT EXISTS login_attempts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                ip_address VARCHAR(64) NOT NULL,
+                success TINYINT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_login_ip (ip_address, created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
         ],
     }
 
-    # 按序执行未应用的迁移
     for ver in sorted(migrations.keys()):
         if ver <= current_version:
             continue
-        sqls = migrations[ver]
-        if not sqls:
-            continue  # 空迁移跳过
-        for sql in sqls:
+        for sql in migrations[ver]:
+            if not sql:
+                continue
             try:
-                db.execute(sql)
-            except sqlite3.OperationalError as e:
-                # 列已存在则跳过（幂等）
-                if "duplicate column" in str(e).lower():
+                cur.execute(sql)
+            except Exception as e:
+                if "Duplicate column" in str(e) or "already exists" in str(e):
                     pass
                 else:
-                    raise
-        db.execute("INSERT INTO schema_version (version) VALUES (?)", (ver,))
+                    print(f"[DB Migration] v{ver} error: {e}")
+        cur.execute("INSERT INTO schema_version (version) VALUES (%s)", (ver,))
         print(f"[DB Migration] v{ver} applied")
 
-    db.commit()
+    cur.close()
     db.close()
+    print("[DB] MySQL initialized successfully")
 
 
-# 应用启动时自动执行数据库初始化
+# 应用启动时初始化数据库
 init_db()
 
 
-# ──────────────────── 班型配置 ────────────────────
+# ═══════════════════════════════════════════
+# 异步日志写入队列（高并发��化）
+# ═══════════════════════════════════════════
+
+_log_queue = queue.Queue()
+
+
+def _log_writer_thread():
+    """后台线程：从队列取出日志写入 MySQL，批量提交"""
+    conn = pymysql.connect(
+        host=app.config["MYSQL_HOST"],
+        port=app.config["MYSQL_PORT"],
+        user=app.config["MYSQL_USER"],
+        password=app.config["MYSQL_PASSWORD"],
+        database=app.config["MYSQL_DATABASE"],
+        charset="utf8mb4",
+        autocommit=False,
+    )
+    cur = conn.cursor()
+    batch = []
+    last_flush = time.time()
+
+    while True:
+        try:
+            item = _log_queue.get(timeout=2)
+            if item is None:
+                break
+            batch.append(item)
+
+            if len(batch) >= 50 or (time.time() - last_flush > 1 and batch):
+                _flush_batch(cur, conn, batch)
+                batch = []
+                last_flush = time.time()
+        except queue.Empty:
+            if batch:
+                _flush_batch(cur, conn, batch)
+                batch = []
+                last_flush = time.time()
+
+    if batch:
+        _flush_batch(cur, conn, batch)
+    cur.close()
+    conn.close()
+
+
+def _flush_batch(cur, conn, batch):
+    """批量写入日志"""
+    try:
+        cur.executemany(
+            "INSERT INTO query_logs (name, admitted, class_type) VALUES (%s, %s, %s)",
+            batch,
+        )
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+
+# 启动后台日志写入线程
+_log_thread = threading.Thread(target=_log_writer_thread, daemon=True)
+_log_thread.start()
+
+
+# ═══════════════════════════════════════════
+# 班型配置
+# ═══════════════════════════════════════════
 
 CLASS_TYPES = {
     "kete": {"name": "科特班", "title": "科特班·英才计划录取结果查询", "category": "科特班·英才计划"},
@@ -175,21 +320,16 @@ CLASS_TYPES = {
 }
 
 
-# ──────────────────── 辅助函数 ────────────────────
+# ═══════════════════════════════════════════
+# 辅助函数
+# ═══════════════════════════════════════════
 
 def generate_grade():
-    """生成综合成绩排名：前1% 到 前9% 随机取值"""
     pct = random.randint(1, 9)
     return f"前{pct}%"
 
 
-def generate_score():
-    """废弃：原综合得分，新需求改为百分比排名。保留函数以兼容旧数据读取。"""
-    return round(random.uniform(91.3, 97.6), 1)
-
-
 def generate_captcha():
-    """生成数学验证码，返回 (表达式, 答案)"""
     ops = [
         ("+", lambda a, b: a + b),
         ("-", lambda a, b: a - b),
@@ -210,20 +350,30 @@ def generate_captcha():
 
 
 def log_audit(action, target="", detail=""):
-    """记录管理后台操作日志"""
     try:
-        db = sqlite3.connect(app.config["DATABASE"])
-        db.execute(
-            "INSERT INTO admin_audit_log (action, target, detail) VALUES (?, ?, ?)",
-            (action, target, detail)
+        conn = pymysql.connect(
+            host=app.config["MYSQL_HOST"],
+            port=app.config["MYSQL_PORT"],
+            user=app.config["MYSQL_USER"],
+            password=app.config["MYSQL_PASSWORD"],
+            database=app.config["MYSQL_DATABASE"],
+            charset="utf8mb4",
+            autocommit=True,
         )
-        db.commit()
-        db.close()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO admin_audit_log (action, target, detail) VALUES (%s, %s, %s)",
+            (action, target, detail),
+        )
+        cur.close()
+        conn.close()
     except Exception:
-        pass  # 日志记录失败不阻塞主流程
+        pass
 
 
-# ──────────────────── 认证 ────────────────────
+# ═══════════════════════════════════════════
+# 认证
+# ═══════════════════════════════════════════
 
 def login_required(f):
     @wraps(f)
@@ -235,7 +385,6 @@ def login_required(f):
 
 
 def api_login_required(f):
-    """API 专用认证：未登录返回 JSON 401 而非重定向"""
     @wraps(f)
     def decorated(*args, **kwargs):
         if not session.get("admin_logged_in"):
@@ -244,15 +393,15 @@ def api_login_required(f):
     return decorated
 
 
-# ──────────────────── 前端路由 ────────────────────
+# ═══════════════════════════════════════════
+# 前端路由
+# ═══════════════════════════════════════════
 
 @app.route("/")
 def root():
-    """根路径跳转到默认班型（科特班）"""
     return redirect("/kete")
 
 
-# ⚠️ /admin 必须在 /<class_type> 之前注册，否则会被捕获为 class_type="admin"
 @app.route("/admin")
 def admin_login_page():
     return render_template("admin_login.html")
@@ -267,41 +416,37 @@ def admin_login():
 
     db = get_db()
 
-    # 检查是否被锁定：最近 LOGIN_LOCKOUT_MINUTES 分钟内连续失败 MAX_LOGIN_ATTEMPTS 次
-    lockout_cutoff = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    failed_count = db.execute(
+    failed_count = 0
+    row = db.execute(
         """SELECT COUNT(*) as cnt FROM login_attempts
-           WHERE ip_address = ? AND success = 0
-           AND datetime(created_at, ?) > datetime('now', 'localtime')""",
-        (client_ip, f"+{app.config['LOGIN_LOCKOUT_MINUTES']} minutes")
-    ).fetchone()["cnt"]
+           WHERE ip_address = %s AND success = 0
+           AND created_at > DATE_SUB(NOW(), INTERVAL %s MINUTE)""",
+        (client_ip, app.config["LOGIN_LOCKOUT_MINUTES"]),
+    ).fetchone()
+    if row:
+        failed_count = row["cnt"]
 
     if failed_count >= app.config["MAX_LOGIN_ATTEMPTS"]:
-        remaining = app.config["LOGIN_LOCKOUT_MINUTES"]
         return jsonify({
             "success": False,
-            "message": f"登录尝试次数过多，请 {remaining} 分钟后再试"
+            "message": f"登录尝试次数过多，请 {app.config['LOGIN_LOCKOUT_MINUTES']} 分钟后再试"
         })
 
-    # 验证用户名 + 密码哈希
     if username == app.config["ADMIN_USERNAME"] and check_password_hash(app.config["ADMIN_PASSWORD_HASH"], password):
         session["admin_logged_in"] = True
-        session.permanent = True  # 启用 PERMANENT_SESSION_LIFETIME
+        session.permanent = True
         db.execute(
-            "INSERT INTO login_attempts (ip_address, success) VALUES (?, 1)",
-            (client_ip,)
+            "INSERT INTO login_attempts (ip_address, success) VALUES (%s, 1)",
+            (client_ip,),
         )
         db.commit()
         return jsonify({"success": True})
 
-    # 登录失败：记录并延迟响应
     db.execute(
-        "INSERT INTO login_attempts (ip_address, success) VALUES (?, 0)",
-        (client_ip,)
+        "INSERT INTO login_attempts (ip_address, success) VALUES (%s, 0)",
+        (client_ip,),
     )
     db.commit()
-
-    # 失败后延迟 1 秒，增加暴力破解成本
     time.sleep(1)
     return jsonify({"success": False, "message": "账号或密码错误"})
 
@@ -320,9 +465,7 @@ def admin_dashboard():
 
 @app.route("/<class_type>")
 def index(class_type):
-    """用户查询首页，class_type 区分班型"""
     if class_type not in CLASS_TYPES:
-        # 非已知班型，返回 404
         return render_template("error.html", code=404, message="页面不存在"), 404
     ct = CLASS_TYPES[class_type]
     return render_template("index.html", class_type=class_type, class_name=ct["name"], page_title=ct["title"])
@@ -330,7 +473,6 @@ def index(class_type):
 
 @app.route("/<class_type>/result")
 def result_page(class_type):
-    """录取结果页（独立页面）"""
     if class_type not in CLASS_TYPES:
         return render_template("error.html", code=404, message="页面不存在"), 404
     ct = CLASS_TYPES[class_type]
@@ -349,12 +491,11 @@ def result_page(class_type):
 
 @app.route("/<class_type>/invite")
 def invite_page(class_type):
-    """入学邀请函独立页面"""
     if class_type not in CLASS_TYPES:
         return render_template("error.html", code=404, message="页面不存在"), 404
     ct = CLASS_TYPES[class_type]
     student_name = request.args.get("name", "")
-    badge_text = f"英才计划录取资格"
+    badge_text = "英才计划录取资格"
     today = datetime.now().strftime("%Y年%m月%d日")
     return render_template("invite.html",
         class_type=class_type,
@@ -364,33 +505,31 @@ def invite_page(class_type):
         today_date=today)
 
 
+# ═══════════════════════════════════════════
+# 验证码 API
+# ═══════════════════════════════════════════
+
 @app.route("/api/captcha")
 def get_captcha():
-    """生成数学验证码，返回 token 和表达式（先生成时自动清理过期验证码）"""
-    import uuid
-
-    # 自动清理超过10分钟的未使用验证码
-    # 注意：created_at 存储的是 UTC 时间（触发器已转换），所以用 datetime('now') 比较
     db = get_db()
-    db.execute(
-        "DELETE FROM captcha_store WHERE used = 0 AND datetime(created_at, '+10 minutes') < datetime('now')"
-    )
+    # 自动清理超过10分钟的未使用验证码
+    db.execute("DELETE FROM captcha_store WHERE used = 0 AND created_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)")
     db.commit()
 
     expression, answer = generate_captcha()
     token = uuid.uuid4().hex[:16]
 
-    db.execute(
-        "INSERT INTO captcha_store (token, answer) VALUES (?, ?)",
-        (token, answer)
-    )
+    db.execute("INSERT INTO captcha_store (token, answer) VALUES (%s, %s)", (token, answer))
     db.commit()
     return jsonify({"token": token, "expression": expression})
 
 
+# ═══════════════════════════════════════════
+# 查询 API（异步日志写入，高并发优化）
+# ═══════════════════════════════════════════
+
 @app.route("/api/query")
 def query():
-    """查询是否被录取"""
     name = request.args.get("name", "").strip()
     class_type = request.args.get("class_type", "kete").strip()
     captcha_token = request.args.get("captcha_token", "").strip()
@@ -399,12 +538,13 @@ def query():
     if not name:
         return jsonify({"success": False, "message": "请输入姓名"})
 
-    # 验证验证码
     db = get_db()
+
+    # 验证码验证
     if captcha_token and captcha_answer:
         captcha_row = db.execute(
-            "SELECT answer, used FROM captcha_store WHERE token = ?",
-            (captcha_token,)
+            "SELECT answer, used FROM captcha_store WHERE token = %s",
+            (captcha_token,),
         ).fetchone()
         if not captcha_row:
             return jsonify({"success": False, "message": "验证码已过期，请刷新后重试"})
@@ -415,36 +555,38 @@ def query():
                 return jsonify({"success": False, "message": "验证码错误，请重新输入"})
         except (ValueError, TypeError):
             return jsonify({"success": False, "message": "验证码格式错误"})
-        # 标记验证码已使用
-        db.execute("UPDATE captcha_store SET used = 1 WHERE token = ?", (captcha_token,))
+        # 原子标记已使用（高并发安全）
+        affected = db.execute(
+            "UPDATE captcha_store SET used = 1 WHERE token = %s AND used = 0",
+            (captcha_token,),
+        )
+        if affected == 0:
+            return jsonify({"success": False, "message": "验证码已使用，请刷新后重试"})
         db.commit()
     else:
         return jsonify({"success": False, "message": "请输入验证码"})
 
-    db = get_db()
+    # 查询录取结果
     row = db.execute(
-        "SELECT name, category, class_type, grade, score FROM admissions WHERE name = ? AND class_type = ?",
-        (name, class_type)
+        "SELECT name, category, class_type, grade, score FROM admissions WHERE name = %s AND class_type = %s",
+        (name, class_type),
     ).fetchone()
 
     if row:
-        # 已有记录，返回固定值
         grade = row["grade"] or generate_grade()
-        # 如果之前没有生成过，更新到数据库
         if not row["grade"]:
             db.execute(
-                "UPDATE admissions SET grade = ? WHERE name = ? AND class_type = ?",
-                (grade, name, class_type)
+                "UPDATE admissions SET grade = %s WHERE name = %s AND class_type = %s",
+                (grade, name, class_type),
             )
             db.commit()
-        # 记录查询日志
+
         ct = CLASS_TYPES.get(class_type, CLASS_TYPES["kete"])
         category = row["category"] or ct["category"]
-        db.execute(
-            "INSERT INTO query_logs (name, admitted, class_type) VALUES (?, 1, ?)",
-            (name, class_type)
-        )
-        db.commit()
+
+        # 异步写入查询日志（不阻塞响应）
+        _log_queue.put((name, 1, class_type))
+
         return jsonify({
             "success": True,
             "admitted": True,
@@ -455,17 +597,15 @@ def query():
             "score": ""
         })
     else:
-        # 记录未录取查询
-        db.execute(
-            "INSERT INTO query_logs (name, admitted, class_type) VALUES (?, 0, ?)",
-            (name, class_type)
-        )
-        db.commit()
+        # 异步写入未录取日志
+        _log_queue.put((name, 0, class_type))
+
         return jsonify({"success": True, "admitted": False, "message": "未查询到录取信息"})
 
 
-# ──────────────────── 管理后台 API ────────────────────
-
+# ═══════════════════════════════════════════
+# 管理后台 API
+# ═══════════════════════════════════════════
 
 @app.route("/api/admin/stats")
 @api_login_required
@@ -475,35 +615,26 @@ def admin_stats():
     kete = db.execute("SELECT COUNT(*) as cnt FROM admissions WHERE class_type = 'kete'").fetchone()["cnt"]
     yucai = db.execute("SELECT COUNT(*) as cnt FROM admissions WHERE class_type = 'yucai'").fetchone()["cnt"]
 
-    # 今日查询数（使用 datetime('now', 'localtime') 确保北京时间）
     today = datetime.now().strftime("%Y-%m-%d")
     today_queries = db.execute(
-        "SELECT COUNT(*) as cnt FROM query_logs WHERE date(created_at, 'localtime') = ?",
-        (today,)
+        "SELECT COUNT(*) as cnt FROM query_logs WHERE DATE(created_at) = %s",
+        (today,),
     ).fetchone()["cnt"]
 
-    # 总查询数
     total_queries = db.execute("SELECT COUNT(*) as cnt FROM query_logs").fetchone()["cnt"]
+    confirmed = db.execute("SELECT COUNT(*) as cnt FROM query_logs WHERE needs != ''").fetchone()["cnt"]
 
-    # 已提交需求数
-    confirmed = db.execute(
-        "SELECT COUNT(*) as cnt FROM query_logs WHERE needs != ''"
-    ).fetchone()["cnt"]
-
-    # 录取率（被录取的查询 / 总查询）
     admitted_count = db.execute(
         "SELECT COUNT(*) as cnt FROM query_logs WHERE admitted = 1"
     ).fetchone()["cnt"]
 
     admission_rate = round(admitted_count / total_queries * 100, 1) if total_queries > 0 else 0
 
-    # 今日新增录取名单
     today_new = db.execute(
-        "SELECT COUNT(*) as cnt FROM admissions WHERE date(created_at, 'localtime') = ?",
-        (today,)
+        "SELECT COUNT(*) as cnt FROM admissions WHERE DATE(created_at) = %s",
+        (today,),
     ).fetchone()["cnt"]
 
-    # 按班型维度的查询统计
     kete_queries = db.execute(
         "SELECT COUNT(*) as cnt FROM query_logs WHERE class_type = 'kete'"
     ).fetchone()["cnt"]
@@ -536,7 +667,6 @@ def admin_stats():
 @app.route("/api/admin/upload", methods=["POST"])
 @api_login_required
 def admin_upload():
-    """上传录取名单 - 支持 JSON、纯文本、CSV"""
     data = request.get_json()
     if not data or "names" not in data:
         return jsonify({"success": False, "message": "未收到数据"})
@@ -550,7 +680,6 @@ def admin_upload():
     db = get_db()
     inserted = 0
     skipped = 0
-    errors = []
 
     for item in names:
         name = item.get("name", "").strip() if isinstance(item, dict) else str(item).strip()
@@ -559,10 +688,9 @@ def admin_upload():
         if not name:
             continue
 
-        # 检查重复（同班型按姓名去重）
         existing = db.execute(
-            "SELECT id FROM admissions WHERE name = ? AND class_type = ?",
-            (name, class_type)
+            "SELECT id FROM admissions WHERE name = %s AND class_type = %s",
+            (name, class_type),
         ).fetchone()
 
         if existing:
@@ -571,12 +699,12 @@ def admin_upload():
 
         try:
             db.execute(
-                "INSERT INTO admissions (name, category, class_type) VALUES (?, ?, ?)",
-                (name, category, class_type)
+                "INSERT INTO admissions (name, category, class_type) VALUES (%s, %s, %s)",
+                (name, category, class_type),
             )
             inserted += 1
-        except Exception as e:
-            errors.append(str(e))
+        except Exception:
+            pass
 
     db.commit()
 
@@ -586,14 +714,12 @@ def admin_upload():
         "success": True,
         "inserted": inserted,
         "skipped": skipped,
-        "errors": errors
     })
 
 
 @app.route("/api/admin/list")
 @api_login_required
 def admin_list():
-    """分页获取录取名单"""
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 50, type=int)
     search = request.args.get("search", "").strip()
@@ -601,43 +727,42 @@ def admin_list():
 
     db = get_db()
 
-    if search or filter_class:
-        conditions = []
-        params = []
-        if search:
-            conditions.append("name LIKE ?")
-            params.append(f"%{search}%")
-        if filter_class:
-            conditions.append("class_type = ?")
-            params.append(filter_class)
+    conditions = []
+    params = []
+    if search:
+        conditions.append("name LIKE %s")
+        params.append(f"%{search}%")
+    if filter_class:
+        conditions.append("class_type = %s")
+        params.append(filter_class)
+
+    if conditions:
         where = " AND ".join(conditions)
         count = db.execute(
-            f"SELECT COUNT(*) as cnt FROM admissions WHERE {where}",
-            params
+            f"SELECT COUNT(*) as cnt FROM admissions WHERE {where}", params
         ).fetchone()["cnt"]
         rows = db.execute(
-            f"SELECT id, name, class_type, created_at FROM admissions WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?",
-            params + [per_page, (page - 1) * per_page]
+            f"SELECT id, name, class_type, created_at FROM admissions WHERE {where} ORDER BY id DESC LIMIT %s OFFSET %s",
+            params + [per_page, (page - 1) * per_page],
         ).fetchall()
     else:
         count = db.execute("SELECT COUNT(*) as cnt FROM admissions").fetchone()["cnt"]
         rows = db.execute(
-            "SELECT id, name, class_type, created_at FROM admissions ORDER BY id DESC LIMIT ? OFFSET ?",
-            (per_page, (page - 1) * per_page)
+            "SELECT id, name, class_type, created_at FROM admissions ORDER BY id DESC LIMIT %s OFFSET %s",
+            (per_page, (page - 1) * per_page),
         ).fetchall()
 
     return jsonify({
         "total": count,
         "page": page,
         "per_page": per_page,
-        "items": [dict(r) for r in rows]
+        "items": [dict(r) for r in rows] if rows else []
     })
 
 
 @app.route("/api/admin/update/<int:record_id>", methods=["PUT"])
 @api_login_required
 def admin_update(record_id):
-    """编辑录取名单的姓名或班型"""
     data = request.get_json()
     new_name = data.get("name", "").strip()
     new_class_type = data.get("class_type", "").strip()
@@ -648,29 +773,27 @@ def admin_update(record_id):
         return jsonify({"success": False, "message": "班型无效"})
 
     db = get_db()
-    # 检查目标姓名+班型是否已存在（排除自身）
+
     existing = db.execute(
-        "SELECT id FROM admissions WHERE name = ? AND class_type = ? AND id != ?",
-        (new_name, new_class_type, record_id)
+        "SELECT id FROM admissions WHERE name = %s AND class_type = %s AND id != %s",
+        (new_name, new_class_type, record_id),
     ).fetchone()
     if existing:
         return jsonify({"success": False, "message": "该姓名在此班型下已存在"})
 
-    # 获取旧记录用于日志
     old = db.execute(
-        "SELECT name, class_type FROM admissions WHERE id = ?", (record_id,)
+        "SELECT name, class_type FROM admissions WHERE id = %s", (record_id,),
     ).fetchone()
     if not old:
         return jsonify({"success": False, "message": "记录不存在"})
 
     db.execute(
-        "UPDATE admissions SET name = ?, class_type = ? WHERE id = ?",
-        (new_name, new_class_type, record_id)
+        "UPDATE admissions SET name = %s, class_type = %s WHERE id = %s",
+        (new_name, new_class_type, record_id),
     )
     db.commit()
 
-    log_audit("编辑录取名单",
-              old["name"],
+    log_audit("编辑录取名单", old["name"],
               f"姓名: {old['name']}→{new_name}, 班型: {CLASS_TYPES.get(old['class_type'], {}).get('name', old['class_type'])}→{CLASS_TYPES.get(new_class_type, {}).get('name', new_class_type)}")
 
     return jsonify({"success": True})
@@ -679,7 +802,6 @@ def admin_update(record_id):
 @app.route("/api/admin/list/export")
 @api_login_required
 def admin_list_export():
-    """导出录取名单为 CSV"""
     db = get_db()
     rows = db.execute(
         "SELECT name, class_type, created_at FROM admissions ORDER BY id DESC"
@@ -692,7 +814,7 @@ def admin_list_export():
         writer.writerow([
             r["name"],
             CLASS_TYPES.get(r["class_type"], {}).get("name", r["class_type"] or "-"),
-            r["created_at"]
+            r["created_at"],
         ])
 
     output.seek(0)
@@ -706,9 +828,8 @@ def admin_list_export():
 @api_login_required
 def admin_delete(record_id):
     db = get_db()
-    # 先查记录信息用于日志
-    row = db.execute("SELECT name, class_type FROM admissions WHERE id = ?", (record_id,)).fetchone()
-    db.execute("DELETE FROM admissions WHERE id = ?", (record_id,))
+    row = db.execute("SELECT name, class_type FROM admissions WHERE id = %s", (record_id,)).fetchone()
+    db.execute("DELETE FROM admissions WHERE id = %s", (record_id,))
     db.commit()
     if row:
         log_audit("删除录取名单", row["name"], f"班型: {CLASS_TYPES.get(row['class_type'], {}).get('name', row['class_type'])}")
@@ -718,13 +839,12 @@ def admin_delete(record_id):
 @app.route("/api/admin/batch-delete", methods=["POST"])
 @api_login_required
 def admin_batch_delete():
-    """批量删除录取名单"""
     data = request.get_json()
     ids = data.get("ids", [])
     if not ids:
         return jsonify({"success": False, "message": "未选择记录"})
     db = get_db()
-    placeholders = ",".join("?" * len(ids))
+    placeholders = ",".join(["%s"] * len(ids))
     db.execute(f"DELETE FROM admissions WHERE id IN ({placeholders})", ids)
     db.commit()
     log_audit("批量删除录取名单", "", f"删除 {len(ids)} 条记录")
@@ -741,11 +861,12 @@ def admin_clear():
     return jsonify({"success": True})
 
 
-# ──────────────────── 查询日志 ────────────────────
+# ═══════════════════════════════════════════
+# 查询日志
+# ═══════════════════════════════════════════
 
 @app.route("/api/schedule/confirm", methods=["POST"])
 def schedule_confirm():
-    """用户提交培养需求"""
     data = request.get_json()
     name = data.get("name", "").strip()
     needs = data.get("needs", [])
@@ -757,8 +878,10 @@ def schedule_confirm():
 
     db = get_db()
     db.execute(
-        "UPDATE query_logs SET needs = ? WHERE name = ? AND admitted = 1 AND id = (SELECT MAX(id) FROM query_logs WHERE name = ? AND admitted = 1)",
-        (needs_str, name, name)
+        """UPDATE query_logs SET needs = %s
+           WHERE name = %s AND admitted = 1
+           AND id = (SELECT MAX(id) FROM (SELECT id FROM query_logs WHERE name = %s AND admitted = 1) t)""",
+        (needs_str, name, name),
     )
     db.commit()
     return jsonify({"success": True})
@@ -767,7 +890,6 @@ def schedule_confirm():
 @app.route("/api/admin/logs")
 @api_login_required
 def admin_logs():
-    """分页获取查询日志"""
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 50, type=int)
     search = request.args.get("search", "").strip()
@@ -778,10 +900,10 @@ def admin_logs():
     conditions = []
     params = []
     if search:
-        conditions.append("name LIKE ?")
+        conditions.append("name LIKE %s")
         params.append(f"%{search}%")
     if filter_class:
-        conditions.append("class_type = ?")
+        conditions.append("class_type = %s")
         params.append(filter_class)
 
     if conditions:
@@ -790,28 +912,27 @@ def admin_logs():
             f"SELECT COUNT(*) as cnt FROM query_logs WHERE {where}", params
         ).fetchone()["cnt"]
         rows = db.execute(
-            f"SELECT id, name, admitted, class_type, needs, created_at FROM query_logs WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?",
-            params + [per_page, (page - 1) * per_page]
+            f"SELECT id, name, admitted, class_type, needs, created_at FROM query_logs WHERE {where} ORDER BY id DESC LIMIT %s OFFSET %s",
+            params + [per_page, (page - 1) * per_page],
         ).fetchall()
     else:
         count = db.execute("SELECT COUNT(*) as cnt FROM query_logs").fetchone()["cnt"]
         rows = db.execute(
-            "SELECT id, name, admitted, class_type, needs, created_at FROM query_logs ORDER BY id DESC LIMIT ? OFFSET ?",
-            (per_page, (page - 1) * per_page)
+            "SELECT id, name, admitted, class_type, needs, created_at FROM query_logs ORDER BY id DESC LIMIT %s OFFSET %s",
+            (per_page, (page - 1) * per_page),
         ).fetchall()
 
     return jsonify({
         "total": count,
         "page": page,
         "per_page": per_page,
-        "items": [dict(r) for r in rows]
+        "items": [dict(r) for r in rows] if rows else []
     })
 
 
 @app.route("/api/admin/logs/export")
 @api_login_required
 def admin_logs_export():
-    """导出查询日志为 CSV"""
     db = get_db()
     rows = db.execute(
         "SELECT name, admitted, class_type, needs, created_at FROM query_logs ORDER BY id DESC"
@@ -826,7 +947,7 @@ def admin_logs_export():
             CLASS_TYPES.get(r["class_type"], {}).get("name", r["class_type"] or "-"),
             "已录取" if r["admitted"] else "未录取",
             r["needs"] or "-",
-            r["created_at"]
+            r["created_at"],
         ])
 
     output.seek(0)
@@ -839,13 +960,12 @@ def admin_logs_export():
 @app.route("/api/admin/logs/batch-delete", methods=["POST"])
 @api_login_required
 def admin_logs_batch_delete():
-    """批量删除查询日志"""
     data = request.get_json()
     ids = data.get("ids", [])
     if not ids:
         return jsonify({"success": False, "message": "未选择记录"})
     db = get_db()
-    placeholders = ",".join("?" * len(ids))
+    placeholders = ",".join(["%s"] * len(ids))
     db.execute(f"DELETE FROM query_logs WHERE id IN ({placeholders})", ids)
     db.commit()
     log_audit("批量删除查询日志", "", f"删除 {len(ids)} 条日志")
@@ -855,7 +975,6 @@ def admin_logs_batch_delete():
 @app.route("/api/admin/logs/clear", methods=["DELETE"])
 @api_login_required
 def admin_logs_clear():
-    """清空全部查询日志"""
     db = get_db()
     db.execute("DELETE FROM query_logs")
     db.commit()
@@ -863,52 +982,55 @@ def admin_logs_clear():
     return jsonify({"success": True})
 
 
-# ──────────────────── 操作日志 ────────────────────
+# ═══════════════════════════════════════════
+# 操作日志
+# ═══════════════════════════════════════════
 
 @app.route("/api/admin/audit-logs")
 @api_login_required
 def admin_audit_logs():
-    """分页获取管理后台操作日志"""
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 50, type=int)
 
     db = get_db()
     count = db.execute("SELECT COUNT(*) as cnt FROM admin_audit_log").fetchone()["cnt"]
     rows = db.execute(
-        "SELECT id, action, target, detail, admin_user, created_at FROM admin_audit_log ORDER BY id DESC LIMIT ? OFFSET ?",
-        (per_page, (page - 1) * per_page)
+        "SELECT id, action, target, detail, admin_user, created_at FROM admin_audit_log ORDER BY id DESC LIMIT %s OFFSET %s",
+        (per_page, (page - 1) * per_page),
     ).fetchall()
 
     return jsonify({
         "total": count,
         "page": page,
         "per_page": per_page,
-        "items": [dict(r) for r in rows]
+        "items": [dict(r) for r in rows] if rows else []
     })
 
 
 @app.route("/api/admin/audit-logs/clear", methods=["DELETE"])
 @api_login_required
 def admin_audit_logs_clear():
-    """清空操作日志"""
     db = get_db()
     db.execute("DELETE FROM admin_audit_log")
     db.commit()
     return jsonify({"success": True})
 
 
-# ──────────────────── 定期清理过期验证码 ────────────────────
+# ═══════════════════════════════════════════
+# 验证码清理
+# ═══════════════════════════════════════════
 
 @app.route("/api/captcha/cleanup")
 def captcha_cleanup():
-    """手动触发清理超过10分钟的未使用验证码"""
     db = get_db()
-    db.execute("DELETE FROM captcha_store WHERE used = 0 AND datetime(created_at, '+10 minutes') < datetime('now')")
+    db.execute("DELETE FROM captcha_store WHERE used = 0 AND created_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)")
     db.commit()
     return jsonify({"success": True})
 
 
-# ──────────────────── 错误页面 ────────────────────
+# ═══════════════════════════════════════════
+# 错误页面
+# ═══════════════════════════════════════════
 
 @app.errorhandler(404)
 def page_not_found(e):
@@ -920,7 +1042,9 @@ def server_error(e):
     return render_template("error.html", code=500, message="服务器内部错误"), 500
 
 
-# ──────────────────── 启动 ────────────────────
+# ═══════════════════════════════════════════
+# 启动
+# ═══════════════════════════════════════════
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
