@@ -612,7 +612,10 @@ def invite_page(class_type):
 def get_captcha():
     db = get_db()
     # 自动清理超过10分钟的未使用验证码
-    db.execute("DELETE FROM captcha_store WHERE used = 0 AND created_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)")
+    if DB_IS_MYSQL:
+        db.execute("DELETE FROM captcha_store WHERE used = 0 AND created_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)")
+    else:
+        db.execute("DELETE FROM captcha_store WHERE used = 0 AND created_at < datetime('now', '-10 minutes')")
     db.commit()
 
     expression, answer = generate_captcha()
@@ -1122,7 +1125,10 @@ def admin_audit_logs_clear():
 @app.route("/api/captcha/cleanup")
 def captcha_cleanup():
     db = get_db()
-    db.execute("DELETE FROM captcha_store WHERE used = 0 AND created_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)")
+    if DB_IS_MYSQL:
+        db.execute("DELETE FROM captcha_store WHERE used = 0 AND created_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)")
+    else:
+        db.execute("DELETE FROM captcha_store WHERE used = 0 AND created_at < datetime('now', '-10 minutes')")
     db.commit()
     return jsonify({"success": True})
 
