@@ -7,7 +7,18 @@ import uuid
 import threading
 import queue
 import sqlite3 as sqlite3_module
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+# 北京时间
+TZ_CN = timezone(timedelta(hours=8))
+
+def now_cn():
+    """返回北京时间 datetime"""
+    return datetime.now(TZ_CN).replace(tzinfo=None)
+
+def now_cn_str(fmt="%Y-%m-%d %H:%M:%S"):
+    """返回北京时间字符串"""
+    return datetime.now(TZ_CN).strftime(fmt)
 
 try:
     import pymysql
@@ -145,7 +156,7 @@ def init_db():
         engine_sql = ""
         int_pk = "INTEGER PRIMARY KEY AUTOINCREMENT"
         varchar = "TEXT"
-        timestamp_default = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        timestamp_default = "TIMESTAMP DEFAULT (datetime('now', '+8 hours'))"
         tinyint = "INTEGER"
         text_type = "TEXT"
 
@@ -595,7 +606,7 @@ def invite_page(class_type):
     ct = CLASS_TYPES[class_type]
     student_name = request.args.get("name", "")
     badge_text = "英才计划录取资格"
-    today = datetime.now().strftime("%Y年%m月%d日")
+    today = now_cn_str("%Y年%m月%d日")
     return render_template("invite.html",
         class_type=class_type,
         class_name=ct["name"],
@@ -725,7 +736,7 @@ def admin_stats():
     kete = db.execute("SELECT COUNT(*) as cnt FROM admissions WHERE class_type = 'kete'").fetchone()["cnt"]
     yucai = db.execute("SELECT COUNT(*) as cnt FROM admissions WHERE class_type = 'yucai'").fetchone()["cnt"]
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = now_cn_str("%Y-%m-%d")
     today_queries = db.execute(
         "SELECT COUNT(*) as cnt FROM query_logs WHERE DATE(created_at) = %s",
         (today,),
