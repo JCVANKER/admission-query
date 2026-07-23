@@ -35,6 +35,8 @@ function switchUploadTab(tab) {
 // 上传
 // ═══════════════════════════════════════════
 
+let _pendingNames = null;  // 预览后待确认的名单
+
 async function doUpload() {
     const msgEl = document.getElementById('uploadMsg');
     msgEl.textContent = '';
@@ -52,14 +54,12 @@ async function doUpload() {
         }
         const file = fileInput.files[0];
         const fileName = file.name.toLowerCase();
-        // xlsx 文件用 SheetJS 解析
         if (fileName.endsWith('.xlsx')) {
             try {
                 const buffer = await file.arrayBuffer();
                 const workbook = XLSX.read(buffer, { type: 'array' });
                 const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
                 const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-                // 提取所有行的第一列（姓名列），跳过空行
                 const nameList = [];
                 for (const row of rows) {
                     if (row && row.length > 0 && row[0]) {
@@ -93,6 +93,68 @@ async function doUpload() {
         return;
     }
 
+    // 显示预览确认弹窗
+    _pendingNames = names;
+    showPreviewModal(names);
+}
+
+function showPreviewModal(names) {
+    const classTypeName = uploadClassType === 'yucai' ? '育才班' : '科特班';
+    
+    // 只显示前 20 条预览
+    const previewItems = names.slice(0, 20);
+    const moreCount = names.length - previewItems.length;
+    
+    let tableRows = previewItems.map((item, i) => 
+        `<tr><td>${i + 1}</td><td>${escapeHtml(item.name)}</td><td>${classTypeName}</td></tr>`
+    ).join('');
+    
+    if (moreCount > 0) {
+        tableRows += `<tr><td colspan="3" style="text-align:center;color:#999;padding:8px;">... 还有 ${moreCount} 条记录</td></tr>`;
+    }
+
+    const html = `
+    <div class="modal-overlay" id="previewModal">
+        <div class="modal-content preview-modal">
+            <h3>📋 名单预览确认</h3>
+            <div class="preview-info">
+                <span>班型：<strong>${classTypeName}</strong></span>
+                <span>共 <strong>${names.length}</strong> 条记录</span>
+            </div>
+            <div class="preview-table-wrap">
+                <table class="preview-table">
+                    <thead><tr><th>序号</th><th>姓名</th><th>班型</th></tr></thead>
+                    <tbody>${tableRows}</tbody>
+                </table>
+            </div>
+            <p class="preview-warning">⚠️ 请仔细核对名单，确认后将立即入库</p>
+            <div class="modal-buttons">
+                <button class="btn-cancel" onclick="closePreviewModal()">取消</button>
+                <button class="btn-primary" onclick="confirmUpload()">✅ 确认上传</button>
+            </div>
+        </div>
+    </div>`;
+
+    const existing = document.getElementById('previewModal');
+    if (existing) existing.remove();
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function closePreviewModal() {
+    const modal = document.getElementById('previewModal');
+    if (modal) modal.remove();
+    _pendingNames = null;
+}
+
+async function confirmUpload() {
+    if (!_pendingNames) return;
+    const names = _pendingNames;
+    _pendingNames = null;
+    
+    const modal = document.getElementById('previewModal');
+    if (modal) modal.remove();
+
+    const msgEl = document.getElementById('uploadMsg');
     msgEl.textContent = `正在上传 ${names.length} 条记录...`;
     msgEl.className = 'upload-msg';
 
@@ -112,6 +174,8 @@ async function doUpload() {
             loadAuditLogs(1);
             document.getElementById('textInput').value = '';
             document.getElementById('fileInput').value = '';
+            const dz = document.getElementById('dropZone');
+            if (dz) dz.querySelector('p').textContent = '📂 点击选择文件或拖拽到此处';
         } else {
             msgEl.textContent = data.message || '上传失败';
             msgEl.className = 'upload-msg err';
@@ -423,8 +487,16 @@ function doExportLogs() {
     window.location.href = '/api/admin/logs/export';
 }
 
+function doExportLogsXlsx() {
+    window.location.href = '/api/admin/logs/export_xlsx';
+}
+
 function doExportList() {
     window.location.href = '/api/admin/list/export';
+}
+
+function doExportListXlsx() {
+    window.location.href = '/api/admin/list/export_xlsx';
 }
 
 // ═══════════════════════════════════════════

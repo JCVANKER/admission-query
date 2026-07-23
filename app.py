@@ -1,8 +1,11 @@
 import random
 import os
+import sys
 import csv
 import io
 import time
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 import uuid
 import threading
 import queue
@@ -302,6 +305,10 @@ def init_db():
             "UPDATE captcha_store SET created_at = datetime(created_at, '+8 hours') WHERE created_at IS NOT NULL",
             "UPDATE login_attempts SET created_at = datetime(created_at, '+8 hours') WHERE created_at IS NOT NULL",
         ],
+        7: [
+            # 添加 IP 地址字段，用于查询频率限制
+            "ALTER TABLE query_logs ADD COLUMN ip_address VARCHAR(64) DEFAULT ''",
+        ],
     }
 
     for ver in sorted(migrations.keys()):
@@ -472,12 +479,14 @@ def log_audit(action, target="", detail=""):
             )
         else:
             cur.execute(
-                "INSERT INTO admin_audit_log (action, target, detail, created_at) VALUES (?, ?, ?, ?)",
+                "INSERT INTO admin_audit_log (action, target, detail, created_at) VALUES (%s, %s, %s, %s)",
                 (action, target, detail, now_cn_str()),
             )
+        conn.commit()
         cur.close()
         conn.close()
-    except Exception:
+    except Exception as e:
+        print(f"[Audit] log_audit error: {e}", file=sys.stderr)
         pass
 
 
@@ -690,6 +699,15 @@ def query():
     else:
         return jsonify({"success": False, "message": "请输入验证码"})
 
+    # 查询频率限制：同一 IP + 同一姓名 30 分钟内最多 3 次
+    client_ip = request.remote_addr or "unknown"
+    rate_limit_row = db.execute(
+        "SELECT COUNT(*) as cnt FROM query_logs WHERE name = %s AND ip_address = %s AND created_at > datetime('now', '-30 minutes', '+8 hours')",
+        (name, client_ip),
+    ).fetchone()
+    if rate_limit_row and rate_limit_row["cnt"] >= 3:
+        return jsonify({"success": False, "message": "查询次数过多，请30分钟后再试"})
+
     # 查询录取结果
     row = db.execute(
         "SELECT name, category, class_type, grade, score FROM admissions WHERE name = %s AND class_type = %s",
@@ -710,8 +728,8 @@ def query():
 
         # 同步写入查询日志（确保管理后台立即可见）
         db.execute(
-            "INSERT INTO query_logs (name, admitted, class_type, created_at) VALUES (%s, 1, %s, %s)",
-            (name, class_type, now_cn_str()),
+            "INSERT INTO query_logs (name, admitted, class_type, ip_address, created_at) VALUES (%s, 1, %s, %s, %s)",
+            (name, class_type, client_ip, now_cn_str()),
         )
         db.commit()
 
@@ -727,8 +745,8 @@ def query():
     else:
         # 同步写入未录取日志
         db.execute(
-            "INSERT INTO query_logs (name, admitted, class_type, created_at) VALUES (%s, 0, %s, %s)",
-            (name, class_type, now_cn_str()),
+            "INSERT INTO query_logs (name, admitted, class_type, ip_address, created_at) VALUES (%s, 0, %s, %s, %s)",
+            (name, class_type, client_ip, now_cn_str()),
         )
         db.commit()
 
@@ -956,6 +974,60 @@ def admin_list_export():
     return resp
 
 
+@app.route("/api/admin/list/export_xlsx")
+@api_login_required
+def admin_list_export_xlsx():
+    db = get_db()
+    rows = db.execute(
+        "SELECT name, class_type, created_at FROM admissions ORDER BY id DESC"
+    ).fetchall()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "录取名单"
+
+    # 表头样式
+    header_font = Font(bold=True, color="FFFFFF", size=12)
+    header_fill = PatternFill(start_color="4F46E5", end_color="4F46E5", fill_type="solid")
+    header_alignment = Alignment(horizontal="center", vertical="center")
+    thin_border = Border(
+        left=Side(style="thin"), right=Side(style="thin"),
+        top=Side(style="thin"), bottom=Side(style="thin")
+    )
+
+    headers = ["姓名", "班型", "添加时间"]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_alignment
+        cell.border = thin_border
+
+    for row_idx, r in enumerate(rows, 2):
+        values = [
+            r["name"],
+            CLASS_TYPES.get(r["class_type"], {}).get("name", r["class_type"] or "-"),
+            str(r["created_at"]) if r["created_at"] else "-",
+        ]
+        for col_idx, val in enumerate(values, 1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            cell.border = thin_border
+            cell.alignment = Alignment(vertical="center")
+
+    ws.column_dimensions['A'].width = 16
+    ws.column_dimensions['B'].width = 14
+    ws.column_dimensions['C'].width = 22
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    resp = make_response(output.getvalue())
+    resp.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    resp.headers["Content-Disposition"] = "attachment; filename=admissions_list.xlsx"
+    return resp
+
+
 @app.route("/api/admin/delete/<int:record_id>", methods=["DELETE"])
 @api_login_required
 def admin_delete(record_id):
@@ -1086,6 +1158,66 @@ def admin_logs_export():
     resp = make_response(output.getvalue())
     resp.headers["Content-Type"] = "text/csv; charset=utf-8-sig"
     resp.headers["Content-Disposition"] = "attachment; filename=query_logs.csv"
+    return resp
+
+
+@app.route("/api/admin/logs/export_xlsx")
+@api_login_required
+def admin_logs_export_xlsx():
+    db = get_db()
+    rows = db.execute(
+        "SELECT name, admitted, class_type, needs, ip_address, created_at FROM query_logs ORDER BY id DESC"
+    ).fetchall()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "查询日志"
+
+    header_font = Font(bold=True, color="FFFFFF", size=12)
+    header_fill = PatternFill(start_color="4F46E5", end_color="4F46E5", fill_type="solid")
+    header_alignment = Alignment(horizontal="center", vertical="center")
+    thin_border = Border(
+        left=Side(style="thin"), right=Side(style="thin"),
+        top=Side(style="thin"), bottom=Side(style="thin")
+    )
+
+    headers = ["姓名", "班型", "录取状态", "培养需求", "查询IP", "查询时间"]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_alignment
+        cell.border = thin_border
+
+    for row_idx, r in enumerate(rows, 2):
+        ip_val = r["ip_address"] if "ip_address" in r.keys() else ""
+        values = [
+            r["name"],
+            CLASS_TYPES.get(r["class_type"], {}).get("name", r["class_type"] or "-"),
+            "已录取" if r["admitted"] else "未录取",
+            r["needs"] or "-",
+            ip_val or "-",
+            str(r["created_at"]) if r["created_at"] else "-",
+        ]
+        for col_idx, val in enumerate(values, 1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            cell.border = thin_border
+            cell.alignment = Alignment(vertical="center")
+
+    ws.column_dimensions['A'].width = 14
+    ws.column_dimensions['B'].width = 10
+    ws.column_dimensions['C'].width = 10
+    ws.column_dimensions['D'].width = 28
+    ws.column_dimensions['E'].width = 18
+    ws.column_dimensions['F'].width = 22
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    resp = make_response(output.getvalue())
+    resp.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    resp.headers["Content-Disposition"] = "attachment; filename=query_logs.xlsx"
     return resp
 
 

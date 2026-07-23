@@ -112,7 +112,8 @@
                     <option value="yucai">育才班</option>
                 </select>
                 <div class="toolbar-actions">
-                    <button class="btn-primary" onclick="doExportList()">📥 导出名单</button>
+                    <button class="btn-primary" onclick="doExportList()">📥 导出 CSV</button>
+                    <button class="btn-primary" onclick="doExportListXlsx()">📥 导出 Excel</button>
                     <button class="btn-danger-outline" onclick="doBatchDelete()">🗑 批量删除</button>
                     <button class="btn-danger-outline" onclick="doClearAll()">🗑 清空全部</button>
                 </div>
@@ -150,6 +151,7 @@
                 </select>
                 <div class="toolbar-actions">
                     <button class="btn-primary" onclick="doExportLogs()">📥 导出 CSV</button>
+                    <button class="btn-primary" onclick="doExportLogsXlsx()">📥 导出 Excel</button>
                     <button class="btn-danger-outline" onclick="doBatchDeleteLogs()">🗑 批量删除</button>
                     <button class="btn-danger-outline" onclick="doClearAllLogs()">🗑 清空全部</button>
                 </div>
