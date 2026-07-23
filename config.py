@@ -21,8 +21,19 @@ class Config:
     MYSQL_PASSWORD = os.environ.get("MYSQL_PASSWORD", "Adm1ssion@2026!")
     MYSQL_DATABASE = os.environ.get("MYSQL_DATABASE", "admission")
 
-    # SQLite 路径
-    DATABASE = os.path.join(BASE_DIR, "admission.db")
+    # SQLite 路径（优先使用 Render 持久磁盘 /data 目录）
+    _data_dir = os.environ.get("RENDER_DATA_DIR", os.environ.get("DATA_DIR", ""))
+    if _data_dir and os.path.isdir(_data_dir):
+        DATABASE = os.path.join(_data_dir, "admission.db")
+    else:
+        # 回退：检查 /data（Render 磁盘默认挂载点）
+        _fallback = "/data"
+        if os.path.isdir(_fallback):
+            DATABASE = os.path.join(_fallback, "admission.db")
+        else:
+            DATABASE = os.path.join(BASE_DIR, "admission.db")
+
+    print(f"[Config] DATABASE path: {DATABASE}", file=sys.stderr)
 
     # 自动检测数据库类型：如果没设 DB_TYPE 且没设 MYSQL_HOST，默认 SQLite
     if not DB_TYPE:
