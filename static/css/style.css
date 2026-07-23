@@ -1045,14 +1045,33 @@ body.admin-page .container {
 
 .confirmed-badge {
     display: inline-block;
-    padding: 2px 10px;
-    border-radius: 12px;
-    font-size: 0.76rem;
-    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 500;
     color: #059669;
     background: #ecfdf5;
     border: 1px solid #a7f3d0;
-    margin: 1px 2px;
+    margin: 2px 2px;
+    line-height: 1.3;
+    max-width: 100%;
+    word-break: break-all;
+    white-space: normal;
+    text-align: center;
+}
+
+/* 移动端查询日志卡片中的培养需求标签特殊布局 */
+.table-wrapper.card-view tbody td[data-label="培养需求"] {
+    flex-direction: column;
+    align-items: flex-start;
+}
+.table-wrapper.card-view tbody td[data-label="培养需求"]::before {
+    margin-bottom: 4px;
+}
+.table-wrapper.card-view tbody td[data-label="培养需求"] .confirmed-badge {
+    display: inline-block;
+    text-align: left;
+    max-width: 100%;
 }
 
 /* 操作日志标签 */
