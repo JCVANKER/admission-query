@@ -6,51 +6,77 @@
     <title>管理后台 - 录取查询系统</title>
     <link rel="stylesheet" href="/static/css/style.css?v={{ app_version }}">
 </head>
-<body>
+<body class="admin-page">
     <div class="container">
+        <!-- Toast 通知容器 -->
+        <div class="toast-container" id="toastContainer"></div>
+
         <!-- 顶部导航 -->
         <nav class="admin-nav">
-            <h2>📋 管理后台</h2>
+            <div class="admin-nav-brand">
+                <div class="admin-nav-icon">📋</div>
+                <h2>管理后台</h2>
+            </div>
+            <div class="admin-nav-stats">
+                <span class="stat-badge" id="totalBadge">
+                    <span style="font-size:0.7rem;">👥</span> 总计: --
+                </span>
+                <span class="stat-badge kete" id="keteBadge">
+                    <span style="font-size:0.7rem;">🔵</span> 科特班: --
+                </span>
+                <span class="stat-badge yucai" id="yucaiBadge">
+                    <span style="font-size:0.7rem;">🟡</span> 育才班: --
+                </span>
+            </div>
             <div class="nav-actions">
-                <span class="stat-badge" id="totalBadge">总计: --</span>
-                <span class="stat-badge kete" id="keteBadge">科特班: --</span>
-                <span class="stat-badge yucai" id="yucaiBadge">育才班: --</span>
-                <a href="/admin/logout" class="btn-logout">退出登录</a>
                 <a href="/kete" class="btn-back">← 查询首页</a>
+                <a href="/admin/logout" class="btn-logout">退出登录</a>
             </div>
         </nav>
 
         <!-- 统计概览卡片 -->
         <div class="stats-grid" id="statsGrid">
-            <div class="stat-card">
-                <div class="stat-card-icon">👥</div>
-                <div class="stat-card-value" id="statTotal">--</div>
-                <div class="stat-card-label">录取总人数</div>
-            </div>
-            <div class="stat-card accent-green">
-                <div class="stat-card-icon">📊</div>
-                <div class="stat-card-value" id="statTodayQueries">--</div>
-                <div class="stat-card-label">今日查询次数</div>
-            </div>
             <div class="stat-card accent-purple">
-                <div class="stat-card-icon">📈</div>
-                <div class="stat-card-value" id="statTotalQueries">--</div>
-                <div class="stat-card-label">累计查询次数</div>
-            </div>
-            <div class="stat-card accent-orange">
-                <div class="stat-card-icon">✅</div>
-                <div class="stat-card-value" id="statConfirmed">--</div>
-                <div class="stat-card-label">提交培养需求人数</div>
+                <div class="stat-card-icon-wrap">👥</div>
+                <div class="stat-card-info">
+                    <div class="stat-card-value" id="statTotal">--</div>
+                    <div class="stat-card-label">录取总人数</div>
+                </div>
             </div>
             <div class="stat-card accent-blue">
-                <div class="stat-card-icon">📉</div>
-                <div class="stat-card-value" id="statRate">--</div>
-                <div class="stat-card-label">录取率</div>
+                <div class="stat-card-icon-wrap">📊</div>
+                <div class="stat-card-info">
+                    <div class="stat-card-value" id="statTodayQueries">--</div>
+                    <div class="stat-card-label">今日查询</div>
+                </div>
             </div>
             <div class="stat-card accent-teal">
-                <div class="stat-card-icon">🆕</div>
-                <div class="stat-card-value" id="statTodayNew">--</div>
-                <div class="stat-card-label">今日新增名单</div>
+                <div class="stat-card-icon-wrap">📈</div>
+                <div class="stat-card-info">
+                    <div class="stat-card-value" id="statTotalQueries">--</div>
+                    <div class="stat-card-label">累计查询</div>
+                </div>
+            </div>
+            <div class="stat-card accent-green">
+                <div class="stat-card-icon-wrap">✅</div>
+                <div class="stat-card-info">
+                    <div class="stat-card-value" id="statConfirmed">--</div>
+                    <div class="stat-card-label">提交需求</div>
+                </div>
+            </div>
+            <div class="stat-card accent-orange">
+                <div class="stat-card-icon-wrap">📉</div>
+                <div class="stat-card-info">
+                    <div class="stat-card-value" id="statRate">--</div>
+                    <div class="stat-card-label">录取率</div>
+                </div>
+            </div>
+            <div class="stat-card accent-rose">
+                <div class="stat-card-icon-wrap">🆕</div>
+                <div class="stat-card-info">
+                    <div class="stat-card-value" id="statTodayNew">--</div>
+                    <div class="stat-card-label">今日新增</div>
+                </div>
             </div>
         </div>
 
@@ -58,35 +84,41 @@
         <div class="admin-section">
             <h3>📤 上传录取名单</h3>
 
-            <!-- 班型选择 -->
-            <div class="class-select" style="margin-bottom:12px;">
-                <label style="font-weight:600;margin-right:12px;">选择班型：</label>
-                <label style="margin-right:16px;cursor:pointer;">
-                    <input type="radio" name="uploadClassType" value="kete" checked onchange="setUploadClassType('kete')"> 科特班
-                </label>
-                <label style="cursor:pointer;">
-                    <input type="radio" name="uploadClassType" value="yucai" onchange="setUploadClassType('yucai')"> 育才班
-                </label>
+            <!-- 班型选择卡片 -->
+            <div class="class-type-cards">
+                <div class="class-type-card active" id="classCardKete" onclick="setUploadClassType('kete')">
+                    <span class="check-mark">✓</span>
+                    <div class="class-type-card-icon">🔵</div>
+                    <div class="class-type-card-name">科特班</div>
+                    <div class="class-type-card-desc">科特班·英才计划</div>
+                </div>
+                <div class="class-type-card" id="classCardYucai" onclick="setUploadClassType('yucai')">
+                    <span class="check-mark">✓</span>
+                    <div class="class-type-card-icon">🟡</div>
+                    <div class="class-type-card-name">育才班</div>
+                    <div class="class-type-card-desc">育才班·英才计划</div>
+                </div>
             </div>
 
             <!-- 上传方式切换 -->
-            <div class="upload-tabs" style="margin-bottom:12px;">
+            <div class="upload-tabs">
                 <button class="tab-btn active" onclick="switchUploadTab('text')">文本粘贴</button>
                 <button class="tab-btn" onclick="switchUploadTab('file')">文件上传</button>
-                <a href="/static/template.csv" download class="tab-btn" style="text-decoration:none;margin-left:auto;">📥 下载模板</a>
+                <a href="/static/template.csv" download class="tab-btn tab-download">📥 下载模板</a>
             </div>
 
             <!-- 文本模式 -->
             <div class="tab-panel active" id="upload-panel-text">
-                <p class="tab-hint">每行一个姓名。也可从 Excel 复制粘贴。</p>
-                <textarea id="textInput" rows="8" placeholder="张三&#10;李四&#10;王五&#10;赵六"></textarea>
+                <p class="tab-hint">每行一个姓名，可从 Excel 复制粘贴</p>
+                <textarea id="textInput" rows="6" placeholder="张三&#10;李四&#10;王五&#10;赵六"></textarea>
             </div>
 
             <!-- 文件模式 -->
             <div class="tab-panel" id="upload-panel-file" style="display:none;">
-                <p class="tab-hint">支持上传 .txt / .csv / .xlsx 文件</p>
+                <p class="tab-hint">支持 .txt / .csv / .xlsx 文件</p>
                 <div class="file-drop-zone" id="dropZone">
-                    <p>📂 点击选择文件或拖拽到此处</p>
+                    <span class="drop-icon">📂</span>
+                    <p>点击选择文件或拖拽到此处</p>
                     <input type="file" id="fileInput" accept=".txt,.csv,.xlsx" style="display:none;">
                 </div>
             </div>
@@ -94,7 +126,7 @@
             <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 
             <div class="upload-actions">
-                <button class="btn-primary" onclick="doUpload()">📤 上传名单</button>
+                <button class="btn-primary btn-lg" onclick="doUpload()">📤 上传名单</button>
                 <span class="upload-msg" id="uploadMsg"></span>
             </div>
         </div>
@@ -104,25 +136,26 @@
             <h3>📋 录取名单管理</h3>
             <div class="list-toolbar">
                 <div class="search-box">
+                    <span class="search-icon">🔍</span>
                     <input type="text" id="searchInput" placeholder="搜索姓名..." oninput="debounceSearch()">
                 </div>
-                <select id="listClassFilter" onchange="loadList(1)" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;">
+                <select id="listClassFilter" onchange="loadList(1)">
                     <option value="">全部班型</option>
                     <option value="kete">科特班</option>
                     <option value="yucai">育才班</option>
                 </select>
                 <div class="toolbar-actions">
-                    <button class="btn-primary" onclick="doExportList()">📥 导出 CSV</button>
-                    <button class="btn-primary" onclick="doExportListXlsx()">📥 导出 Excel</button>
+                    <button class="btn-outline" onclick="doExportList()">📥 CSV</button>
+                    <button class="btn-outline" onclick="doExportListXlsx()">📥 Excel</button>
                     <button class="btn-danger-outline" onclick="doBatchDelete()">🗑 批量删除</button>
                     <button class="btn-danger-outline" onclick="doClearAll()">🗑 清空全部</button>
                 </div>
             </div>
-            <div class="table-wrapper">
+            <div class="table-wrapper" id="listTableWrapper">
                 <table class="data-table" id="dataTable">
                     <thead>
                         <tr>
-                            <th style="width:40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                            <th style="width:44px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
                             <th>姓名</th>
                             <th>班型</th>
                             <th>添加时间</th>
@@ -142,25 +175,26 @@
             <h3>📊 查询回传记录</h3>
             <div class="list-toolbar">
                 <div class="search-box">
+                    <span class="search-icon">🔍</span>
                     <input type="text" id="logSearchInput" placeholder="搜索姓名..." oninput="debounceLogSearch()">
                 </div>
-                <select id="logClassFilter" onchange="loadLogs(1)" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;">
+                <select id="logClassFilter" onchange="loadLogs(1)">
                     <option value="">全部班型</option>
                     <option value="kete">科特班</option>
                     <option value="yucai">育才班</option>
                 </select>
                 <div class="toolbar-actions">
-                    <button class="btn-primary" onclick="doExportLogs()">📥 导出 CSV</button>
-                    <button class="btn-primary" onclick="doExportLogsXlsx()">📥 导出 Excel</button>
+                    <button class="btn-outline" onclick="doExportLogs()">📥 CSV</button>
+                    <button class="btn-outline" onclick="doExportLogsXlsx()">📥 Excel</button>
                     <button class="btn-danger-outline" onclick="doBatchDeleteLogs()">🗑 批量删除</button>
                     <button class="btn-danger-outline" onclick="doClearAllLogs()">🗑 清空全部</button>
                 </div>
             </div>
-            <div class="table-wrapper">
+            <div class="table-wrapper" id="logTableWrapper">
                 <table class="data-table" id="logTable">
                     <thead>
                         <tr>
-                            <th style="width:40px;"><input type="checkbox" id="logSelectAll" onchange="toggleLogSelectAll()"></th>
+                            <th style="width:44px;"><input type="checkbox" id="logSelectAll" onchange="toggleLogSelectAll()"></th>
                             <th>姓名</th>
                             <th>班型</th>
                             <th>录取状态</th>
@@ -184,7 +218,7 @@
                     <button class="btn-danger-outline" onclick="doClearAllAuditLogs()">🗑 清空全部</button>
                 </div>
             </div>
-            <div class="table-wrapper">
+            <div class="table-wrapper" id="auditLogTableWrapper">
                 <table class="data-table" id="auditLogTable">
                     <thead>
                         <tr>
