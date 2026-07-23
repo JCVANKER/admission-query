@@ -686,8 +686,12 @@ def query():
         ct = CLASS_TYPES.get(class_type, CLASS_TYPES["kete"])
         category = row["category"] or ct["category"]
 
-        # 异步写入查询日志（不阻塞响应）
-        _log_queue.put((name, 1, class_type))
+        # 同步写入查询日志（确保管理后台立即可见）
+        db.execute(
+            "INSERT INTO query_logs (name, admitted, class_type) VALUES (%s, 1, %s)",
+            (name, class_type),
+        )
+        db.commit()
 
         return jsonify({
             "success": True,
@@ -699,8 +703,12 @@ def query():
             "score": ""
         })
     else:
-        # 异步写入未录取日志
-        _log_queue.put((name, 0, class_type))
+        # 同步写入未录取日志
+        db.execute(
+            "INSERT INTO query_logs (name, admitted, class_type) VALUES (%s, 0, %s)",
+            (name, class_type),
+        )
+        db.commit()
 
         return jsonify({"success": True, "admitted": False, "message": "未查询到录取信息"})
 
