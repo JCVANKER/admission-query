@@ -294,6 +294,14 @@ def init_db():
                 created_at {timestamp_default}
             ) {engine_sql}""",
         ],
+        6: [
+            # 将旧 UTC 时间转换为北京时间（+8小时）
+            "UPDATE admissions SET created_at = datetime(created_at, '+8 hours') WHERE created_at IS NOT NULL",
+            "UPDATE query_logs SET created_at = datetime(created_at, '+8 hours') WHERE created_at IS NOT NULL",
+            "UPDATE admin_audit_log SET created_at = datetime(created_at, '+8 hours') WHERE created_at IS NOT NULL",
+            "UPDATE captcha_store SET created_at = datetime(created_at, '+8 hours') WHERE created_at IS NOT NULL",
+            "UPDATE login_attempts SET created_at = datetime(created_at, '+8 hours') WHERE created_at IS NOT NULL",
+        ],
     }
 
     for ver in sorted(migrations.keys()):
@@ -459,13 +467,13 @@ def log_audit(action, target="", detail=""):
         cur = conn.cursor()
         if not DB_IS_MYSQL:
             cur.execute(
-                "INSERT INTO admin_audit_log (action, target, detail) VALUES (?, ?, ?)",
-                (action, target, detail),
+                "INSERT INTO admin_audit_log (action, target, detail, created_at) VALUES (?, ?, ?, ?)",
+                (action, target, detail, now_cn_str()),
             )
         else:
             cur.execute(
-                "INSERT INTO admin_audit_log (action, target, detail) VALUES (%s, %s, %s)",
-                (action, target, detail),
+                "INSERT INTO admin_audit_log (action, target, detail, created_at) VALUES (?, ?, ?, ?)",
+                (action, target, detail, now_cn_str()),
             )
         cur.close()
         conn.close()
@@ -546,15 +554,15 @@ def admin_login():
         session["admin_logged_in"] = True
         session.permanent = True
         db.execute(
-            "INSERT INTO login_attempts (ip_address, success) VALUES (%s, 1)",
-            (client_ip,),
+            "INSERT INTO login_attempts (ip_address, success, created_at) VALUES (%s, 1, %s)",
+            (client_ip, now_cn_str()),
         )
         db.commit()
         return jsonify({"success": True})
 
     db.execute(
-        "INSERT INTO login_attempts (ip_address, success) VALUES (%s, 0)",
-        (client_ip,),
+        "INSERT INTO login_attempts (ip_address, success, created_at) VALUES (%s, 0, %s)",
+        (client_ip, now_cn_str()),
     )
     db.commit()
     time.sleep(1)
@@ -632,7 +640,10 @@ def get_captcha():
     expression, answer = generate_captcha()
     token = uuid.uuid4().hex[:16]
 
-    db.execute("INSERT INTO captcha_store (token, answer) VALUES (%s, %s)", (token, answer))
+    db.execute(
+        "INSERT INTO captcha_store (token, answer, created_at) VALUES (%s, %s, %s)",
+        (token, answer, now_cn_str()),
+    )
     db.commit()
     return jsonify({"token": token, "expression": expression})
 
@@ -699,8 +710,8 @@ def query():
 
         # 同步写入查询日志（确保管理后台立即可见）
         db.execute(
-            "INSERT INTO query_logs (name, admitted, class_type) VALUES (%s, 1, %s)",
-            (name, class_type),
+            "INSERT INTO query_logs (name, admitted, class_type, created_at) VALUES (%s, 1, %s, %s)",
+            (name, class_type, now_cn_str()),
         )
         db.commit()
 
@@ -716,8 +727,8 @@ def query():
     else:
         # 同步写入未录取日志
         db.execute(
-            "INSERT INTO query_logs (name, admitted, class_type) VALUES (%s, 0, %s)",
-            (name, class_type),
+            "INSERT INTO query_logs (name, admitted, class_type, created_at) VALUES (%s, 0, %s, %s)",
+            (name, class_type, now_cn_str()),
         )
         db.commit()
 
@@ -820,8 +831,8 @@ def admin_upload():
 
         try:
             db.execute(
-                "INSERT INTO admissions (name, category, class_type) VALUES (%s, %s, %s)",
-                (name, category, class_type),
+                "INSERT INTO admissions (name, category, class_type, created_at) VALUES (%s, %s, %s, %s)",
+                (name, category, class_type, now_cn_str()),
             )
             inserted += 1
         except Exception:
