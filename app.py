@@ -4,6 +4,7 @@ import sys
 import csv
 import io
 import time
+import hashlib
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 import uuid
@@ -239,6 +240,16 @@ def init_db():
         ) {engine_sql}
     """)
 
+    _exec(f"""
+        CREATE TABLE IF NOT EXISTS site_visits (
+            id {int_pk},
+            visit_date {varchar}(16) NOT NULL,
+            visitor_hash {varchar}(64) NOT NULL,
+            class_type {varchar}(16) DEFAULT '',
+            created_at {timestamp_default}
+        ) {engine_sql}
+    """)
+
     # 获取当前 schema 版本
     db_wrapper = DB(db, cur)
     db_wrapper.execute("SELECT MAX(version) as v FROM schema_version")
@@ -255,6 +266,8 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_query_logs_created ON query_logs(created_at)",
             "CREATE INDEX IF NOT EXISTS idx_captcha_token ON captcha_store(token)",
             "CREATE INDEX IF NOT EXISTS idx_login_ip ON login_attempts(ip_address, created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_site_visits_hash ON site_visits(visitor_hash, visit_date)",
+            "CREATE INDEX IF NOT EXISTS idx_site_visits_date ON site_visits(visit_date)",
         ]:
             try:
                 cur.execute(idx_sql)
@@ -308,6 +321,18 @@ def init_db():
         7: [
             # 添加 IP 地址字段，用于查询频率限制
             "ALTER TABLE query_logs ADD COLUMN ip_address VARCHAR(64) DEFAULT ''",
+        ],
+        8: [
+            # 添加站点访问记录表，用于 UV 统计
+            f"""CREATE TABLE IF NOT EXISTS site_visits (
+                id {int_pk},
+                visit_date {varchar}(16) NOT NULL,
+                visitor_hash {varchar}(64) NOT NULL,
+                class_type {varchar}(16) DEFAULT '',
+                created_at {timestamp_default}
+            ) {engine_sql}""",
+            "CREATE INDEX IF NOT EXISTS idx_site_visits_hash ON site_visits(visitor_hash, visit_date)",
+            "CREATE INDEX IF NOT EXISTS idx_site_visits_date ON site_visits(visit_date)",
         ],
     }
 
@@ -590,10 +615,34 @@ def admin_dashboard():
     return render_template("admin_dashboard.html")
 
 
+def record_visit(class_type=""):
+    """记录站点访问 UV（按 IP + User-Agent 去重）"""
+    try:
+        client_ip = request.remote_addr or "unknown"
+        user_agent = request.headers.get("User-Agent", "")
+        visitor_hash = hashlib.md5(f"{client_ip}|{user_agent}".encode("utf-8")).hexdigest()
+        visit_date = now_cn_str("%Y-%m-%d")
+
+        db = get_db()
+        existing = db.execute(
+            "SELECT id FROM site_visits WHERE visitor_hash = %s AND visit_date = %s",
+            (visitor_hash, visit_date),
+        ).fetchone()
+        if not existing:
+            db.execute(
+                "INSERT INTO site_visits (visit_date, visitor_hash, class_type, created_at) VALUES (%s, %s, %s, %s)",
+                (visit_date, visitor_hash, class_type, now_cn_str()),
+            )
+            db.commit()
+    except Exception:
+        pass
+
+
 @app.route("/<class_type>")
 def index(class_type):
     if class_type not in CLASS_TYPES:
         return render_template("error.html", code=404, message="页面不存在"), 404
+    record_visit(class_type)
     ct = CLASS_TYPES[class_type]
     return render_template("index.html", class_type=class_type, class_name=ct["name"], page_title=ct["title"])
 
@@ -761,56 +810,47 @@ def query():
 @api_login_required
 def admin_stats():
     db = get_db()
-    total = db.execute("SELECT COUNT(*) as cnt FROM admissions").fetchone()["cnt"]
-    kete = db.execute("SELECT COUNT(*) as cnt FROM admissions WHERE class_type = 'kete'").fetchone()["cnt"]
-    yucai = db.execute("SELECT COUNT(*) as cnt FROM admissions WHERE class_type = 'yucai'").fetchone()["cnt"]
-
     today = now_cn_str("%Y-%m-%d")
+
+    # 录取名单总数
+    total = db.execute("SELECT COUNT(*) as cnt FROM admissions").fetchone()["cnt"]
+
+    # 累计访问人数（UV）
+    visitors = db.execute("SELECT COUNT(DISTINCT visitor_hash) as cnt FROM site_visits").fetchone()["cnt"]
+    today_visitors = db.execute(
+        "SELECT COUNT(DISTINCT visitor_hash) as cnt FROM site_visits WHERE visit_date = %s",
+        (today,),
+    ).fetchone()["cnt"]
+
+    # 今日查询次数
     today_queries = db.execute(
         "SELECT COUNT(*) as cnt FROM query_logs WHERE DATE(created_at) = %s",
         (today,),
     ).fetchone()["cnt"]
 
+    # 累计查询次数
     total_queries = db.execute("SELECT COUNT(*) as cnt FROM query_logs").fetchone()["cnt"]
-    confirmed = db.execute("SELECT COUNT(*) as cnt FROM query_logs WHERE needs != ''").fetchone()["cnt"]
 
-    admitted_count = db.execute(
-        "SELECT COUNT(*) as cnt FROM query_logs WHERE admitted = 1"
-    ).fetchone()["cnt"]
-
-    admission_rate = round(admitted_count / total_queries * 100, 1) if total_queries > 0 else 0
-
-    today_new = db.execute(
-        "SELECT COUNT(*) as cnt FROM admissions WHERE DATE(created_at) = %s",
-        (today,),
+    # 提交需求人数（去重）
+    confirmed = db.execute(
+        "SELECT COUNT(DISTINCT name) as cnt FROM query_logs WHERE needs IS NOT NULL AND needs != ''"
     ).fetchone()["cnt"]
 
-    kete_queries = db.execute(
-        "SELECT COUNT(*) as cnt FROM query_logs WHERE class_type = 'kete'"
-    ).fetchone()["cnt"]
-    yucai_queries = db.execute(
-        "SELECT COUNT(*) as cnt FROM query_logs WHERE class_type = 'yucai'"
-    ).fetchone()["cnt"]
-    kete_confirmed = db.execute(
-        "SELECT COUNT(*) as cnt FROM query_logs WHERE class_type = 'kete' AND needs != ''"
-    ).fetchone()["cnt"]
-    yucai_confirmed = db.execute(
-        "SELECT COUNT(*) as cnt FROM query_logs WHERE class_type = 'yucai' AND needs != ''"
-    ).fetchone()["cnt"]
+    # 访问查询率 = 查询次数 / 访问人数
+    query_rate = round(total_queries / visitors * 100, 1) if visitors > 0 else 0
+
+    # 查询需求率 = 提交需求人数 / 查询次数
+    need_rate = round(confirmed / total_queries * 100, 1) if total_queries > 0 else 0
 
     return jsonify({
         "total": total,
-        "kete": kete,
-        "yucai": yucai,
+        "visitors": visitors,
+        "today_visitors": today_visitors,
         "today_queries": today_queries,
         "total_queries": total_queries,
         "confirmed": confirmed,
-        "admission_rate": admission_rate,
-        "today_new": today_new,
-        "kete_queries": kete_queries,
-        "yucai_queries": yucai_queries,
-        "kete_confirmed": kete_confirmed,
-        "yucai_confirmed": yucai_confirmed
+        "query_rate": query_rate,
+        "need_rate": need_rate,
     })
 
 
@@ -1028,9 +1068,24 @@ def admin_list_export_xlsx():
     return resp
 
 
+@app.route("/api/admin/verify-password", methods=["POST"])
+@api_login_required
+def admin_verify_password():
+    """验证录取名单删除操作的二次确认密码"""
+    data = request.get_json() or {}
+    password = data.get("password", "")
+    if password == Config.DELETE_CONFIRM_PASSWORD:
+        return jsonify({"success": True})
+    return jsonify({"success": False, "message": "密码错误"})
+
+
 @app.route("/api/admin/delete/<int:record_id>", methods=["DELETE"])
 @api_login_required
 def admin_delete(record_id):
+    data = request.get_json() or {}
+    if data.get("password") != Config.DELETE_CONFIRM_PASSWORD:
+        return jsonify({"success": False, "message": "操作密码错误"})
+
     db = get_db()
     row = db.execute("SELECT name, class_type FROM admissions WHERE id = %s", (record_id,)).fetchone()
     db.execute("DELETE FROM admissions WHERE id = %s", (record_id,))
@@ -1045,6 +1100,8 @@ def admin_delete(record_id):
 def admin_batch_delete():
     data = request.get_json()
     ids = data.get("ids", [])
+    if data.get("password") != Config.DELETE_CONFIRM_PASSWORD:
+        return jsonify({"success": False, "message": "操作密码错误"})
     if not ids:
         return jsonify({"success": False, "message": "未选择记录"})
     db = get_db()
@@ -1058,11 +1115,55 @@ def admin_batch_delete():
 @app.route("/api/admin/clear", methods=["DELETE"])
 @api_login_required
 def admin_clear():
+    data = request.get_json() or {}
+    if data.get("password") != Config.DELETE_CONFIRM_PASSWORD:
+        return jsonify({"success": False, "message": "操作密码错误"})
+
     db = get_db()
     db.execute("DELETE FROM admissions")
     db.commit()
     log_audit("清空录取名单", "", "已清空全部录取名单")
     return jsonify({"success": True})
+
+
+@app.route("/api/admin/batch-change-class-type", methods=["POST"])
+@api_login_required
+def admin_batch_change_class_type():
+    data = request.get_json() or {}
+    ids = data.get("ids", [])
+    class_type = data.get("class_type", "").strip()
+
+    if not ids:
+        return jsonify({"success": False, "message": "未选择记录"})
+    if class_type not in CLASS_TYPES:
+        return jsonify({"success": False, "message": "班型无效"})
+
+    db = get_db()
+    placeholders = ",".join(["%s"] * len(ids))
+    rows = db.execute(
+        f"SELECT id, name, class_type FROM admissions WHERE id IN ({placeholders})",
+        ids,
+    ).fetchall()
+
+    if not rows:
+        return jsonify({"success": False, "message": "未找到可修改的记录"})
+
+    db.execute(
+        f"UPDATE admissions SET class_type = %s WHERE id IN ({placeholders})",
+        [class_type] + ids,
+    )
+    db.commit()
+
+    changed_names = ", ".join([r["name"] for r in rows[:10]])
+    if len(rows) > 10:
+        changed_names += f" 等 {len(rows)} 人"
+    log_audit(
+        "批量修改班型",
+        "",
+        f"将 {len(rows)} 条记录修改为 {CLASS_TYPES.get(class_type, {}).get('name', class_type)}：{changed_names}"
+    )
+
+    return jsonify({"success": True, "updated": len(rows)})
 
 
 # ═══════════════════════════════════════════

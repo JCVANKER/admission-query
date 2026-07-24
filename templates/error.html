@@ -11,8 +11,8 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
                          "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
             min-height: 100vh;
-            background: linear-gradient(180deg, #c53a2a 0%, #a83220 50%, #8a2618 100%);
-            color: #fff;
+            background: linear-gradient(135deg, #eef2ff 0%, #f0f9ff 40%, #fdf2f8 100%);
+            color: #1e293b;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -20,60 +20,117 @@
             -webkit-font-smoothing: antialiased;
         }
         .error-card {
+            background: #fff;
+            border-radius: 20px;
+            padding: 48px 36px;
+            max-width: 400px;
+            width: 100%;
             text-align: center;
-            max-width: 360px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
+            border: 1px solid #e2e8f0;
+            animation: fadeInUp 0.4s ease;
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .error-icon-wrap {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.4rem;
+        }
+        .error-icon-wrap.not-found {
+            background: #eff6ff;
+        }
+        .error-icon-wrap.server-error {
+            background: #fef2f2;
         }
         .error-code {
-            font-size: 5rem;
-            font-weight: 800;
-            color: #f5d78e;
-            line-height: 1;
+            font-size: 1rem;
+            font-weight: 700;
+            color: #64748b;
+            letter-spacing: 0.08em;
             margin-bottom: 8px;
-            letter-spacing: 0.05em;
-        }
-        .error-icon {
-            font-size: 3rem;
-            margin-bottom: 16px;
+            text-transform: uppercase;
         }
         .error-title {
-            font-size: 1.3rem;
+            font-size: 1.35rem;
             font-weight: 700;
             margin-bottom: 12px;
-            color: #fff;
+            color: #1e293b;
         }
         .error-message {
             font-size: 0.9rem;
-            color: rgba(255,255,255,0.7);
+            color: #64748b;
             margin-bottom: 28px;
-            line-height: 1.6;
+            line-height: 1.7;
+        }
+        .error-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
         }
         .error-btn {
-            display: inline-block;
-            padding: 12px 32px;
-            font-size: 0.95rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 11px 24px;
+            font-size: 0.9rem;
             font-weight: 600;
-            color: #c53a2a;
-            background: #fff;
-            border-radius: 24px;
+            border-radius: 10px;
             text-decoration: none;
             transition: all 0.2s ease;
             -webkit-tap-highlight-color: transparent;
         }
-        .error-btn:hover {
-            background: #f5d78e;
+        .error-btn.primary {
+            color: #fff;
+            background: linear-gradient(135deg, #4f46e5, #6366f1);
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+        }
+        .error-btn.primary:hover {
             transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(79, 70, 229, 0.35);
+        }
+        .error-btn.secondary {
+            color: #4f46e5;
+            background: #f5f3ff;
+            border: 1px solid #ddd6fe;
+        }
+        .error-btn.secondary:hover {
+            background: #ede9fe;
+        }
+        @media (max-width: 480px) {
+            .error-card {
+                padding: 36px 24px;
+            }
+            .error-title {
+                font-size: 1.2rem;
+            }
         }
     </style>
 </head>
 <body>
     <div class="error-card">
-        <div class="error-code">{{ code }}</div>
-        <div class="error-icon">{{ '🔍' if code == 404 else '⚠️' }}</div>
+        <div class="error-icon-wrap {{ 'not-found' if code == 404 else 'server-error' }}">
+            {{ '🔍' if code == 404 else '⚠️' }}
+        </div>
+        <div class="error-code">Error {{ code }}</div>
         <h1 class="error-title">{{ message }}</h1>
         <p class="error-message">
-            {{ '您访问的页面不存在或已被移除。请检查链接是否正确。' if code == 404 else '服务器遇到了意外错误，请稍后重试。如果问题持续存在，请联系技术支持。' }}
+            {{ '您访问的页面不存在或已被移除，请检查链接是否正确。' if code == 404 else '服务器遇到了意外错误，请稍后重试。如问题持续存在，请联系技术支持。' }}
         </p>
-        <a href="/" class="error-btn">返回首页</a>
+        <div class="error-actions">
+            <a href="/" class="error-btn primary">← 返回首页</a>
+            {% if code == 404 %}
+            <a href="javascript:history.back()" class="error-btn secondary">返回上页</a>
+            {% endif %}
+        </div>
     </div>
 </body>
 </html>

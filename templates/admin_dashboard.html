@@ -37,45 +37,45 @@
         <!-- 统计概览卡片 -->
         <div class="stats-grid" id="statsGrid">
             <div class="stat-card accent-purple">
-                <div class="stat-card-icon-wrap">👥</div>
+                <div class="stat-card-icon-wrap">📋</div>
                 <div class="stat-card-info">
                     <div class="stat-card-value" id="statTotal">--</div>
-                    <div class="stat-card-label">录取总人数</div>
+                    <div class="stat-card-label">录取名单总数</div>
                 </div>
             </div>
             <div class="stat-card accent-blue">
+                <div class="stat-card-icon-wrap">👥</div>
+                <div class="stat-card-info">
+                    <div class="stat-card-value" id="statVisitors">--</div>
+                    <div class="stat-card-label">访问人数</div>
+                </div>
+            </div>
+            <div class="stat-card accent-teal">
                 <div class="stat-card-icon-wrap">📊</div>
                 <div class="stat-card-info">
                     <div class="stat-card-value" id="statTodayQueries">--</div>
                     <div class="stat-card-label">今日查询</div>
                 </div>
             </div>
-            <div class="stat-card accent-teal">
-                <div class="stat-card-icon-wrap">📈</div>
-                <div class="stat-card-info">
-                    <div class="stat-card-value" id="statTotalQueries">--</div>
-                    <div class="stat-card-label">累计查询</div>
-                </div>
-            </div>
             <div class="stat-card accent-green">
                 <div class="stat-card-icon-wrap">✅</div>
                 <div class="stat-card-info">
                     <div class="stat-card-value" id="statConfirmed">--</div>
-                    <div class="stat-card-label">提交需求</div>
+                    <div class="stat-card-label">提交需求人数</div>
                 </div>
             </div>
             <div class="stat-card accent-orange">
-                <div class="stat-card-icon-wrap">📉</div>
+                <div class="stat-card-icon-wrap">📈</div>
                 <div class="stat-card-info">
-                    <div class="stat-card-value" id="statRate">--</div>
-                    <div class="stat-card-label">录取率</div>
+                    <div class="stat-card-value" id="statQueryRate">--</div>
+                    <div class="stat-card-label">访问查询率</div>
                 </div>
             </div>
             <div class="stat-card accent-rose">
-                <div class="stat-card-icon-wrap">🆕</div>
+                <div class="stat-card-icon-wrap">🎯</div>
                 <div class="stat-card-info">
-                    <div class="stat-card-value" id="statTodayNew">--</div>
-                    <div class="stat-card-label">今日新增</div>
+                    <div class="stat-card-value" id="statNeedRate">--</div>
+                    <div class="stat-card-label">查询需求率</div>
                 </div>
             </div>
         </div>
@@ -143,6 +143,7 @@
                     <option value="yucai">育才班</option>
                 </select>
                 <div class="toolbar-actions">
+                    <button class="btn-outline" onclick="doBatchChangeClassType()">🔄 批量改班型</button>
                     <button class="btn-outline" onclick="doExportListXlsx()">📥 导出Excel</button>
                     <button class="btn-danger-outline" onclick="doBatchDelete()">🗑 批量删除</button>
                     <button class="btn-danger-outline" onclick="doClearAll()">🗑 清空全部</button>

@@ -49,6 +49,9 @@ class Config:
     _raw_password = os.environ.get("ADMIN_PASSWORD", "admin123456")
     ADMIN_PASSWORD_HASH = generate_password_hash(_raw_password)
 
+    # 录取名单删除操作二次确认密码（与登录密码独立）
+    DELETE_CONFIRM_PASSWORD = os.environ.get("DELETE_CONFIRM_PASSWORD", "changsha123456")
+
     PERMANENT_SESSION_LIFETIME = timedelta(minutes=30)
 
     MAX_LOGIN_ATTEMPTS = 5

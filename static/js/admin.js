@@ -381,6 +381,50 @@ function getSelectedIds() {
     return [...document.querySelectorAll('.list-check:checked')].map(cb => parseInt(cb.value));
 }
 
+// 通用删除确认密码输入
+function promptDeletePassword() {
+    const pwd = prompt('⚠️ 该操作风险较高，请输入操作确认密码：');
+    if (pwd === null) return null; // 用户取消
+    if (!pwd.trim()) {
+        showToast('密码不能为空', 'warning');
+        return '';
+    }
+    return pwd.trim();
+}
+
+async function doBatchChangeClassType() {
+    const ids = getSelectedIds();
+    if (!ids.length) {
+        showToast('请先勾选要修改的记录', 'warning');
+        return;
+    }
+
+    const targetType = confirm(`确定要修改选中的 ${ids.length} 条记录吗？\n\n点击「确定」改为「科特班」，点击「取消」改为「育才班」。`)
+        ? 'kete' : 'yucai';
+    const targetName = targetType === 'kete' ? '科特班' : '育才班';
+
+    showConfirm(`确定将选中的 ${ids.length} 条记录改为「${targetName}」吗？`, async () => {
+        try {
+            const resp = await fetch('/api/admin/batch-change-class-type', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids, class_type: targetType })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                showToast(`成功修改 ${data.updated} 条记录为${targetName}`, 'success');
+                loadList(currentPage);
+                loadStats();
+                loadAuditLogs(1);
+            } else {
+                showToast(data.message || '修改失败', 'error');
+            }
+        } catch (err) {
+            showToast('修改失败，请重试', 'error');
+        }
+    });
+}
+
 async function doBatchDelete() {
     const ids = getSelectedIds();
     if (!ids.length) {
@@ -388,11 +432,18 @@ async function doBatchDelete() {
         return;
     }
     showConfirm(`确定要删除选中的 ${ids.length} 条记录吗？`, async () => {
+        const password = promptDeletePassword();
+        if (password === null) return;
+        if (!password) {
+            showToast('未输入确认密码，操作已取消', 'warning');
+            return;
+        }
+
         try {
             const resp = await fetch('/api/admin/batch-delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids })
+                body: JSON.stringify({ ids, password })
             });
             const data = await resp.json();
             if (data.success) {
@@ -400,6 +451,8 @@ async function doBatchDelete() {
                 loadList(currentPage);
                 loadStats();
                 loadAuditLogs(1);
+            } else {
+                showToast(data.message || '删除失败', 'error');
             }
         } catch (err) {
             showToast('删除失败，请重试', 'error');
@@ -409,14 +462,27 @@ async function doBatchDelete() {
 
 async function doDelete(id) {
     showConfirm('确定要删除这条记录吗？', async () => {
+        const password = promptDeletePassword();
+        if (password === null) return;
+        if (!password) {
+            showToast('未输入确认密码，操作已取消', 'warning');
+            return;
+        }
+
         try {
-            const resp = await fetch(`/api/admin/delete/${id}`, { method: 'DELETE' });
+            const resp = await fetch(`/api/admin/delete/${id}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password })
+            });
             const data = await resp.json();
             if (data.success) {
                 showToast('删除成功', 'success');
                 loadList(currentPage);
                 loadStats();
                 loadAuditLogs(1);
+            } else {
+                showToast(data.message || '删除失败', 'error');
             }
         } catch (err) {
             showToast('删除失败，请重试', 'error');
@@ -458,14 +524,27 @@ async function doEdit(id, currentName, currentClassType) {
 
 async function doClearAll() {
     showConfirm('确定要清空全部录取名单吗？此操作不可恢复！', async () => {
+        const password = promptDeletePassword();
+        if (password === null) return;
+        if (!password) {
+            showToast('未输入确认密码，操作已取消', 'warning');
+            return;
+        }
+
         try {
-            const resp = await fetch('/api/admin/clear', { method: 'DELETE' });
+            const resp = await fetch('/api/admin/clear', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password })
+            });
             const data = await resp.json();
             if (data.success) {
                 showToast('已清空全部录取名单', 'success');
                 loadList(1);
                 loadStats();
                 loadAuditLogs(1);
+            } else {
+                showToast(data.message || '清空失败', 'error');
             }
         } catch (err) {
             showToast('清空失败，请重试', 'error');
@@ -774,16 +853,16 @@ async function loadStats() {
         if (resp.status === 401) return;
         const data = await resp.json();
 
-        document.getElementById('totalBadge').innerHTML = '<span style="font-size:0.7rem;">👥</span> 总计: ' + data.total + ' 人';
-        document.getElementById('keteBadge').innerHTML = '<span style="font-size:0.7rem;">🔵</span> 科特班: ' + data.kete + ' 人';
-        document.getElementById('yucaiBadge').innerHTML = '<span style="font-size:0.7rem;">🟡</span> 育才班: ' + data.yucai + ' 人';
+        document.getElementById('totalBadge').innerHTML = '<span style="font-size:0.7rem;">📋</span> 总计: ' + data.total + ' 人';
+        document.getElementById('keteBadge').innerHTML = '<span style="font-size:0.7rem;">🔵</span> 科特班: ' + (data.kete || 0) + ' 人';
+        document.getElementById('yucaiBadge').innerHTML = '<span style="font-size:0.7rem;">🟡</span> 育才班: ' + (data.yucai || 0) + ' 人';
 
         document.getElementById('statTotal').textContent = data.total;
+        document.getElementById('statVisitors').textContent = data.visitors;
         document.getElementById('statTodayQueries').textContent = data.today_queries;
-        document.getElementById('statTotalQueries').textContent = data.total_queries;
         document.getElementById('statConfirmed').textContent = data.confirmed;
-        document.getElementById('statRate').textContent = data.admission_rate + '%';
-        document.getElementById('statTodayNew').textContent = data.today_new;
+        document.getElementById('statQueryRate').textContent = data.query_rate + '%';
+        document.getElementById('statNeedRate').textContent = data.need_rate + '%';
     } catch (err) { /* ignore */ }
 }
 
