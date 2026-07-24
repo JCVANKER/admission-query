@@ -860,7 +860,7 @@ async function loadStats() {
         document.getElementById('statTotal').textContent = data.total;
         document.getElementById('statVisitors').textContent = data.visitors;
         document.getElementById('statTodayQueries').textContent = data.today_queries;
-        document.getElementById('statConfirmed').textContent = data.confirmed;
+        document.getElementById('statConfirmed').textContent = data.today_confirmed;
         document.getElementById('statQueryRate').textContent = data.query_rate + '%';
         document.getElementById('statNeedRate').textContent = data.need_rate + '%';
     } catch (err) { /* ignore */ }
