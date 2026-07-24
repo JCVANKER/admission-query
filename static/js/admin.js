@@ -858,7 +858,7 @@ async function loadStats() {
         document.getElementById('yucaiBadge').innerHTML = '<span style="font-size:0.7rem;">🟡</span> 育才班: ' + (data.yucai || 0) + ' 人';
 
         document.getElementById('statTotal').textContent = data.total;
-        document.getElementById('statVisitors').textContent = data.visitors;
+        document.getElementById('statVisitors').textContent = data.today_visitors;
         document.getElementById('statTodayQueries').textContent = data.today_queries;
         document.getElementById('statConfirmed').textContent = data.today_confirmed;
         document.getElementById('statQueryRate').textContent = data.query_rate + '%';

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""全量回归测试 - 51个测试用例"""
+"""全量回归测试 - 52个测试用例"""
 
 import os
 import sys
@@ -7,10 +7,11 @@ import json
 import hashlib
 import pytest
 from datetime import datetime, timedelta
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app import app, init_db, get_db
+from app import app, init_db, get_db, now_cn
 from config import Config
 
 app.config["TESTING"] = True
@@ -623,19 +624,31 @@ def test_t39_stats_with_queries():
         assert d.get("today_queries") >= 1
 
 def test_t40_stats_visitors():
-    """T40: 访问人数统计（通过 /kete 路由触发 record_visit）"""
+    """T40: 今日访问按 IP 和浏览器去重，并排除历史访问"""
     with app.test_client() as c:
-        # record_visit 在 /<class_type> 路由触发
+        # 相同 IP + User-Agent 重复访问只计一次。
         c.get("/kete", environ_base={"REMOTE_ADDR": "1.2.3.4"}, headers={"User-Agent": "TestBot/1.0"})
-        c.get("/kete", environ_base={"REMOTE_ADDR": "5.6.7.8"}, headers={"User-Agent": "TestBot/2.0"})
-        c.get("/kete", environ_base={"REMOTE_ADDR": "1.2.3.4"}, headers={"User-Agent": "TestBot/1.0"})  # 重复
+        c.get("/kete", environ_base={"REMOTE_ADDR": "1.2.3.4"}, headers={"User-Agent": "TestBot/1.0"})
+
+        # 相同 IP 使用不同浏览器，以及不同 IP，分别计为独立访客。
+        c.get("/kete", environ_base={"REMOTE_ADDR": "1.2.3.4"}, headers={"User-Agent": "TestBot/2.0"})
+        c.get("/kete", environ_base={"REMOTE_ADDR": "5.6.7.8"}, headers={"User-Agent": "TestBot/1.0"})
+
+        with app.app_context():
+            db = get_db()
+            yesterday = (now_cn() - timedelta(days=1)).strftime("%Y-%m-%d")
+            db.execute(
+                "INSERT INTO site_visits (visit_date, visitor_hash, class_type, created_at) VALUES (?, ?, ?, ?)",
+                (yesterday, "historical-visitor", "kete", f"{yesterday} 12:00:00"),
+            )
+            db.commit()
 
         api_login(c)
         resp = c.get("/api/admin/stats")
         d = get_json(resp)
         assert d is not None
-        assert d.get("visitors") == 2
-        assert d.get("today_visitors") == 2
+        assert d.get("visitors") == 4
+        assert d.get("today_visitors") == 3
 
 def test_t41_stats_need_rate():
     """T41: 查询需求率计算验证 — 2人各提交需求，共4次查询，需求率=2/4=50%"""
@@ -841,6 +854,19 @@ def test_t51_stats_card_data_consistency():
         assert d["today_confirmed"] == 2, f"today_confirmed={d['today_confirmed']}"
         assert d["need_rate"] == 50.0, f"need_rate={d['need_rate']}%"
         # 前端 statConfirmed 显示 today_confirmed（=2），need_rate=2/4=50%，两者一致
+
+
+def test_t52_stats_card_uses_today_metrics():
+    """T52: 统计卡片使用今日访问数据，并明确三项今日口径"""
+    project_dir = Path(__file__).resolve().parent
+    template = (project_dir / "templates" / "admin_dashboard.html").read_text(encoding="utf-8")
+    admin_js = (project_dir / "static" / "js" / "admin.js").read_text(encoding="utf-8")
+
+    assert "今日访问人数" in template
+    assert "今日访问查询率" in template
+    assert "今日查询需求率" in template
+    assert "statVisitors').textContent = data.today_visitors" in admin_js
+    assert "statVisitors').textContent = data.visitors" not in admin_js
 
 
 if __name__ == "__main__":

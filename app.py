@@ -843,10 +843,10 @@ def admin_stats():
         "SELECT COUNT(DISTINCT name) as cnt FROM query_logs WHERE needs IS NOT NULL AND needs != ''"
     ).fetchone()["cnt"]
 
-    # 访问查询率 = 今日查询 / 今日访问人数
+    # 今日访问查询率 = 今日查询 / 今日访问人数
     query_rate = round(today_queries / today_visitors * 100, 1) if today_visitors > 0 else 0
 
-    # 查询需求率 = 今日提交需求人数 / 今日查询
+    # 今日查询需求率 = 今日提交需求人数 / 今日查询
     need_rate = round(today_confirmed / today_queries * 100, 1) if today_queries > 0 else 0
 
     return jsonify({
