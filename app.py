@@ -831,16 +831,23 @@ def admin_stats():
     # 累计查询次数
     total_queries = db.execute("SELECT COUNT(*) as cnt FROM query_logs").fetchone()["cnt"]
 
-    # 提交需求人数（去重）
+    # 今日提交需求人数（去重）
+    today_confirmed = db.execute(
+        """SELECT COUNT(DISTINCT name) as cnt FROM query_logs
+           WHERE needs IS NOT NULL AND needs != '' AND DATE(created_at) = %s""",
+        (today,),
+    ).fetchone()["cnt"]
+
+    # 累计提交需求人数（去重）
     confirmed = db.execute(
         "SELECT COUNT(DISTINCT name) as cnt FROM query_logs WHERE needs IS NOT NULL AND needs != ''"
     ).fetchone()["cnt"]
 
-    # 访问查询率 = 查询次数 / 访问人数
-    query_rate = round(total_queries / visitors * 100, 1) if visitors > 0 else 0
+    # 访问查询率 = 今日查询 / 今日访问人数
+    query_rate = round(today_queries / today_visitors * 100, 1) if today_visitors > 0 else 0
 
-    # 查询需求率 = 提交需求人数 / 查询次数
-    need_rate = round(confirmed / total_queries * 100, 1) if total_queries > 0 else 0
+    # 查询需求率 = 今日提交需求人数 / 今日查询
+    need_rate = round(today_confirmed / today_queries * 100, 1) if today_queries > 0 else 0
 
     return jsonify({
         "total": total,
@@ -849,6 +856,7 @@ def admin_stats():
         "today_queries": today_queries,
         "total_queries": total_queries,
         "confirmed": confirmed,
+        "today_confirmed": today_confirmed,
         "query_rate": query_rate,
         "need_rate": need_rate,
     })
