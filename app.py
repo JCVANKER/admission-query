@@ -32,6 +32,7 @@ except ImportError:
     HAS_PYMYSQL = False
 from flask import Flask, g, render_template, request, jsonify, redirect, url_for, session, make_response
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 from functools import wraps
 
 from config import Config
@@ -39,6 +40,8 @@ from config import Config
 
 app = Flask(__name__)
 app.config.from_object(Config)
+# Nginx is the only public entry point and forwards the verified client IP.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
 # Session 过期配置
 app.config["PERMANENT_SESSION_LIFETIME"] = Config.PERMANENT_SESSION_LIFETIME
@@ -118,6 +121,11 @@ def get_db():
             conn.execute("PRAGMA journal_mode=WAL")
             g.db = DB(conn, conn.cursor())
     return g.db
+
+
+def get_client_ip():
+    """Return the client IP after ProxyFix processes Nginx's forwarded headers."""
+    return request.remote_addr or "unknown"
 
 
 @app.teardown_appcontext
@@ -618,7 +626,7 @@ def admin_dashboard():
 def record_visit(class_type=""):
     """记录站点访问 UV（按 IP + User-Agent 去重）"""
     try:
-        client_ip = request.remote_addr or "unknown"
+        client_ip = get_client_ip()
         user_agent = request.headers.get("User-Agent", "")
         visitor_hash = hashlib.md5(f"{client_ip}|{user_agent}".encode("utf-8")).hexdigest()
         visit_date = now_cn_str("%Y-%m-%d")
@@ -749,7 +757,7 @@ def query():
         return jsonify({"success": False, "message": "请输入验证码"})
 
     # 查询频率限制：同一 IP + 同一姓名 30 分钟内最多 3 次
-    client_ip = request.remote_addr or "unknown"
+    client_ip = get_client_ip()
     rate_limit_row = db.execute(
         "SELECT COUNT(*) as cnt FROM query_logs WHERE name = %s AND ip_address = %s AND created_at > datetime('now', '-30 minutes', '+8 hours')",
         (name, client_ip),
